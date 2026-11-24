@@ -1,0 +1,15 @@
+# Woechentliche Update-PRs fuer Abhaengigkeiten (Muster wie upstream repo-kit).
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /gui
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7   # eine Woche nach einem Release warten
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
