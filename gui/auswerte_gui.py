@@ -14,6 +14,14 @@ import sys
 # With -I the script directory is not in sys.path: add the modules from gui/ explicitly.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import i18n
+from i18n import _
+
+# The language must be set before the tab modules are imported (module-level constants are translated at import).
+# Only when started as a program: tests and imports always see English.
+if __name__ == "__main__":
+    i18n.init_from_settings()
+
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -44,7 +52,7 @@ def _load_mkgit() -> dict:
 class AuswerteWindow(QMainWindow):
     def __init__(self, ref_path: str | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("Stiebel Evaluation")
+        self.setWindowTitle(_("Stiebel Evaluation"))
         self.resize(1500, 900)
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         self.meas = Measurements()
@@ -68,23 +76,23 @@ class AuswerteWindow(QMainWindow):
 
     # ---- Menu ----
     def _build_menu(self) -> None:
-        m = self.menuBar().addMenu("&File")
+        m = self.menuBar().addMenu(_("&File"))
         for text, slot in (
-            ("Load measurements…", self.open_measurements),
-            ("Load reference…", self.open_reference),
+            (_("Load measurements…"), self.open_measurements),
+            (_("Load reference…"), self.open_reference),
         ):
             act = QAction(text, self)
             act.triggered.connect(slot)
             m.addAction(act)
-        self._act_save = QAction("Save reference as…", self)
+        self._act_save = QAction(_("Save reference as…"), self)
         self._act_save.triggered.connect(self.save_reference)
         m.addAction(self._act_save)
         m.addSeparator()
-        act = QAction("Export index list as CSV…", self)
+        act = QAction(_("Export index list as CSV…"), self)
         act.triggered.connect(self.export_list)
         m.addAction(act)
         m.addSeparator()
-        act = QAction("Quit", self)
+        act = QAction(_("Quit"), self)
         act.triggered.connect(self.close)
         m.addAction(act)
 
@@ -96,9 +104,9 @@ class AuswerteWindow(QMainWindow):
 
     # ---- Actions ----
     def open_measurements(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, "Load measurements", self._last_dir(),
-            "Measurements (*.json *.csv *.jsonl);;All files (*)")
+        paths, _unused = QFileDialog.getOpenFileNames(
+            self, _("Load measurements"), self._last_dir(),
+            _("Measurements (*.json *.csv *.jsonl);;All files (*)"))
         for p in paths:
             self.load_measurement(p)
 
@@ -106,18 +114,20 @@ class AuswerteWindow(QMainWindow):
         try:
             n = self.meas.load_any(path)
         except (OSError, ValueError, KeyError) as exc:
-            QMessageBox.warning(self, "Load failed", f"{os.path.basename(path)}: {exc}")
+            QMessageBox.warning(self, _("Load failed"), _("{name}: {exc}").format(
+                name=os.path.basename(path), exc=exc))
             return
         self._remember(path)
         self.browser.reload()
         self.analyse.set_models(self.meas, self.ref, self.mkgit)
-        self._update_status(f"{os.path.basename(path)}: {n} entries loaded")
+        self._update_status(_("{name}: {n} entries loaded").format(
+            name=os.path.basename(path), n=n))
 
     def open_reference(self) -> None:
         if not self._confirm_discard():
             return
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load reference", self._last_dir(), "Reference (*.json);;All files (*)")
+        path, _unused = QFileDialog.getOpenFileName(
+            self, _("Load reference"), self._last_dir(), _("Reference (*.json);;All files (*)"))
         if path:
             self.load_reference(path)
 
@@ -125,29 +135,30 @@ class AuswerteWindow(QMainWindow):
         try:
             self.ref = ReferenceModel(path)
         except (OSError, ValueError, KeyError) as exc:
-            QMessageBox.warning(self, "Load failed", f"{os.path.basename(path)}: {exc}")
+            QMessageBox.warning(self, _("Load failed"), _("{name}: {exc}").format(
+                name=os.path.basename(path), exc=exc))
             return
         self._remember(path)
         self.browser.set_models(self.meas, self.ref, self.mkgit)
         self.analyse.set_models(self.meas, self.ref, self.mkgit)
-        self._update_status(f"Reference {os.path.basename(path)} loaded")
+        self._update_status(_("Reference {name} loaded").format(name=os.path.basename(path)))
 
     def save_reference(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save reference as", self._last_dir(), "Reference (*.json)")
+        path, _unused = QFileDialog.getSaveFileName(
+            self, _("Save reference as"), self._last_dir(), _("Reference (*.json)"))
         if not path:
             return
         try:
             self.ref.save_as(path)
         except (OSError, ReferenceError) as exc:
-            QMessageBox.warning(self, "Save failed", str(exc))
+            QMessageBox.warning(self, _("Save failed"), str(exc))
             return
         self._remember(path)
-        self._update_status(f"Reference saved: {os.path.basename(path)}")
+        self._update_status(_("Reference saved: {name}").format(name=os.path.basename(path)))
 
     def export_list(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export index list", self._last_dir(), "CSV (*.csv)")
+        path, _unused = QFileDialog.getSaveFileName(
+            self, _("Export index list"), self._last_dir(), _("CSV (*.csv)"))
         if not path:
             return
         header = ["index", "name_ref", "name_mkgit", "status", "member", "min_max", "typ_abweichung"]
@@ -160,27 +171,29 @@ class AuswerteWindow(QMainWindow):
                     continue
                 w.writerow([table.item(row, c).text() if table.item(row, c) else ""
                             for c in range(len(header))])
-        self._update_status(f"Index list exported: {os.path.basename(path)}")
+        self._update_status(_("Index list exported: {name}").format(name=os.path.basename(path)))
 
     # ---- State ----
     def _on_reference_changed(self) -> None:
         self.browser.refresh_status()
-        self._update_status("Reference changed (not saved)")
+        self._update_status(_("Reference changed (not saved)"))
 
     def _confirm_discard(self) -> bool:
         if not self.ref.dirty:
             return True
         answer = QMessageBox.question(
-            self, "Unsaved changes",
-            "The reference has unsaved changes. Discard?")
+            self, _("Unsaved changes"),
+            _("The reference has unsaved changes. Discard?"))
         return answer == QMessageBox.StandardButton.Yes
 
     def _update_status(self, text: str = "") -> None:
         parts = []
         if text:
             parts.append(text)
-        parts.append(f"Measurements: {', '.join(self.meas.sources) or '-'} ({len(self.meas.indices)} indices)")
-        parts.append(f"Reference: {self.ref.path.name}" + (" *changed*" if self.ref.dirty else ""))
+        parts.append(_("Measurements: {sources} ({count} indices)").format(
+            sources=', '.join(self.meas.sources) or '-', count=len(self.meas.indices)))
+        parts.append(_("Reference: {name}").format(name=self.ref.path.name)
+                     + (_(" *changed*") if self.ref.dirty else ""))
         self.statusBar().showMessage("  |  ".join(parts))
         self._act_save.setEnabled(True)
 

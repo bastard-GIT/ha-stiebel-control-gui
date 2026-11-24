@@ -68,10 +68,16 @@ python -I -m pytest tests
 
 Die Tests laufen ohne Broker; der MQTT-Transport wird durch Fakes ersetzt.
 
-## 7. Hinweis zum Debug-Modus
+## 7. Sprache
+
+Die GUI gibt es auf Englisch (Standard) und Deutsch. Auswahl im Menü **Sprache**; die Wahl wird gespeichert und gilt nach einem Neustart der Anwendung. `STIEBEL_GUI_LANG=de` (oder `en`) überschreibt die gespeicherte Wahl für einen Lauf.
+
+Neue Sprache: Schlüsselliste mit `python -I tools/i18n_check.py --keys` ausgeben, Werte in `gui/locales/<code>.json` übersetzen (`{Platzhalter}` unverändert lassen), Kürzel in `LANGUAGE_NAMES` in `gui/i18n.py` eintragen, dann mit `python -I tools/i18n_check.py` prüfen (fehlende und unbenutzte Schlüssel, Platzhalter). Im Code stehen sichtbare Texte als `_("English text")`; der englische Text ist der Schlüssel. Tests laufen immer auf Englisch.
+
+## 8. Hinweis zum Debug-Modus
 
 Der Debug-Firmware-Modus (Topic-Präfix `stiebel-debug/`) ist eine Altlast. Ziel ist die Upstream-API (`heatingpump/…`, Schnittstelle siehe [docs/INTERFACES.md](docs/INTERFACES.md) (englisch), Abschnitt 13).
 
-## 8. Lizenz
+## 9. Lizenz
 
 GPL-3.0, siehe [LICENSE](LICENSE).

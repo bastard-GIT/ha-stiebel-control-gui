@@ -23,13 +23,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from i18n import _, N_
 from elster import ElsterDb, decode_value, switch_label
 from mqtt_client import FW_DEBUG, FW_PROD, FW_UNKNOWN, MqttBridge
 
 try:
     from elster import build_write_request, encode_value, is_writable
 except ImportError:  # write functions in elster.py still missing: writing stays locked
-    _WRITE_MISSING = "Writing not available yet (elster write functions missing)."
+    _WRITE_MISSING = _("Writing not available yet (elster write functions missing).")
 
     def encode_value(type_name, text):
         raise ValueError(_WRITE_MISSING)
@@ -42,42 +43,45 @@ except ImportError:  # write functions in elster.py still missing: writing stays
 
 MAX_HISTORY = 1000
 FW_LOCK_TEXT = {
-    FW_UNKNOWN: "Waiting for firmware status...",
+    FW_UNKNOWN: _("Waiting for firmware status..."),
 }
 # Production firmware (raw/read): these options do not exist there, they stay disabled.
-PROD_OFF_TIP = "Not available in production mode: the production firmware (raw/read) does not know {}."
+PROD_OFF_TIP = _("Not available in production mode: the production firmware (raw/read) does not know {}.")
 # Same order as self._prod_off: sender, timeout, format
-PROD_OFF_WHAT = ("no sender field", "no timeout", "no format short/long")
+PROD_OFF_WHAT = (_("no sender field"), _("no timeout"), _("no format short/long"))
 DEFAULT_TYPE = "et_default"
 STATUS_TEXT = {
-    "ok": "ok",
-    "unsupported": "not supported",
-    "timeout": "Timeout",
-    "busy": "Firmware busy (scan running)",
+    "ok": _("ok"),
+    "unsupported": _("not supported"),
+    "timeout": _("Timeout"),
+    "busy": _("Firmware busy (scan running)"),
 }
-REJECTED_TEXT = ("Write rejected (status rejected): firmware built without can_raw_write "
-                 "or a lock rule of the firmware.")
-PROD_CONFIRM_LINE = "Firmware: production (raw/write, result may be 'rejected')"
-WRITE_ACK_TEXT = {2: "response", 3: "ack", 4: "write ack", 5: "write respond"}
-HEADERS = ["Time", "Mode", "Member", "Index", "Switch", "Name", "Type", "Raw hex", "Raw dec",
-           "Value", "Ack", "Readback value", "Status"]
+REJECTED_TEXT = _("Write rejected (status rejected): firmware built without can_raw_write "
+                  "or a lock rule of the firmware.")
+PROD_CONFIRM_LINE = _("Firmware: production (raw/write, result may be 'rejected')")
+WRITE_ACK_TEXT = {2: _("response"), 3: _("ack"), 4: _("write ack"), 5: _("write respond")}
+# Keys of the history columns stay English (HEADERS.index("Name")); HEADER_LABELS is the displayed text, same order.
+HEADERS = [N_("Time"), N_("Mode"), N_("Member"), N_("Index"), N_("Switch"), N_("Name"), N_("Type"),
+           N_("Raw hex"), N_("Raw dec"), N_("Value"), N_("Ack"), N_("Readback value"), N_("Status")]
+HEADER_LABELS = [_("Time"), _("Mode"), _("Member"), _("Index"), _("Switch"), _("Name"), _("Type"),
+                 _("Raw hex"), _("Raw dec"), _("Value"), _("Ack"), _("Readback value"), _("Status")]
 _HEX_RE = re.compile(r"^(0x)?[0-9a-fA-F]{1,4}$", re.IGNORECASE)
 _MEMBER_LABEL_RE = re.compile(r"\((0x[0-9a-fA-F]{1,4})\)\s*$")
 
 # Display -> parameter for send_read (INTERFACES 8.3)
-FORMAT_CHOICES = (("auto", "auto"), ("short", "short"), ("long", "long"))
+FORMAT_CHOICES = ((_("auto"), "auto"), (_("short"), "short"), (_("long"), "long"))
 SWITCH_ALL = "alle"  # no firmware option: three normal queries in sequence
-SWITCH_CHOICES = (("current", 0xFA), ("min", 0xF8), ("max", 0xF9), ("all", SWITCH_ALL))
+SWITCH_CHOICES = ((_("current"), 0xFA), (_("min"), 0xF8), (_("max"), 0xF9), (_("all"), SWITCH_ALL))
 DEFAULT_SWITCH = 0xFA
 SEQ_SWITCHES = (0xFA, 0xF8, 0xF9)  # order for 'alle'
 SEQ_TIMEOUT_MS = 3000  # wait time per switch, then continue to the next; shortened in tests
-NO_ANSWER = "no answer"
-SUMMARY_LABELS = (("current", 0xFA), ("min", 0xF8), ("max", 0xF9))
+NO_ANSWER = _("no answer")
+SUMMARY_LABELS = ((_("current"), 0xFA), (_("min"), 0xF8), (_("max"), 0xF9))
 OWN_CAN_ID = 0x680  # own ID of the controller: never allowed as target
 MODE_READ = "read"
 MODE_WRITE = "write"
-MODE_CHOICES = (("Read", MODE_READ), ("Write", MODE_WRITE))
-STANDARD_TYPE_LABEL = "Default (type of the signal)"
+MODE_CHOICES = ((_("Read"), MODE_READ), (_("Write"), MODE_WRITE))
+STANDARD_TYPE_LABEL = _("Default (type of the signal)")
 
 
 def _to_int(value):
@@ -100,9 +104,9 @@ def _parse_raw_hex(text: str) -> int:
     try:
         raw = int(t, 16)
     except ValueError:
-        raise ValueError(f"Raw value is not a hex value: '{text}'") from None
+        raise ValueError(_("Raw value is not a hex value: '{text}'").format(text=text)) from None
     if not 0 <= raw <= 0xFFFF:
-        raise ValueError("Raw value must be between 0x0000 and 0xFFFF.")
+        raise ValueError(_("Raw value must be between 0x0000 and 0xFFFF."))
     return raw
 
 
@@ -153,18 +157,18 @@ class QueryTab(QWidget):
             if can_id is None or can_id == OWN_CAN_ID:
                 continue
             self._src_combo.addItem(f"{m.get('name', '')} (0x{can_id:03x})", can_id)
-        self._src_combo.setToolTip("Sender CAN ID of the request. An ID that itself sends on the bus "
-                                   "can cause collisions; its responses also go to the real device.")
+        self._src_combo.setToolTip(_("Sender CAN ID of the request. An ID that itself sends on the bus "
+                                     "can cause collisions; its responses also go to the real device."))
         self._timeout_spin = QSpinBox()
         self._timeout_spin.setRange(100, 10000)
         self._timeout_spin.setSingleStep(500)
         self._timeout_spin.setValue(1000)
         self._timeout_spin.setSuffix(" ms")
-        self._timeout_spin.setToolTip("Response timeout of the firmware. FES (0x100) needs 0.5..1.5 s, "
-                                      "with backlog up to ~4 s.")
+        self._timeout_spin.setToolTip(_("Response timeout of the firmware. FES (0x100) needs 0.5..1.5 s, "
+                                        "with backlog up to ~4 s."))
 
         self._index_edit = QLineEdit()
-        self._index_edit.setPlaceholderText("Hex (0x4ef0) or signal name")
+        self._index_edit.setPlaceholderText(_("Hex (0x4ef0) or signal name"))
         self._completer_model = QStringListModel(self._signal_labels(), self)
         completer = QCompleter(self._completer_model, self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
@@ -182,23 +186,23 @@ class QueryTab(QWidget):
 
         # Write inputs
         self._value_edit = QLineEdit()
-        self._value_edit.setPlaceholderText("e.g. 52.0 (or hex for raw value)")
+        self._value_edit.setPlaceholderText(_("e.g. 52.0 (or hex for raw value)"))
         self._type_combo = QComboBox()
         self._type_combo.addItem(STANDARD_TYPE_LABEL, None)
         for type_name in sorted({s.get("type") for s in db.signals if s.get("type")}
                                 | {DEFAULT_TYPE}):
             self._type_combo.addItem(type_name, type_name)
-        self._raw_check = QCheckBox("Raw value (hex)")
-        self._arm_check = QCheckBox("Enable writing")
+        self._raw_check = QCheckBox(_("Raw value (hex)"))
+        self._arm_check = QCheckBox(_("Enable writing"))
         self._preview_label = QLabel("")
         self._preview_label.setWordWrap(True)
         self._preview_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
-        self._query_btn = QPushButton("Query")
+        self._query_btn = QPushButton(_("Query"))
         self._query_btn.clicked.connect(self._on_query)
-        self._send_btn = QPushButton("Send")
+        self._send_btn = QPushButton(_("Send"))
         self._send_btn.clicked.connect(self._on_send)
-        self._clear_btn = QPushButton("Clear history")
+        self._clear_btn = QPushButton(_("Clear history"))
         self._clear_btn.clicked.connect(self._on_clear)
 
         self._info_label = QLabel("–")
@@ -216,13 +220,13 @@ class QueryTab(QWidget):
         self._fw_label.setStyleSheet("font-weight: bold;")
 
         # Controls by mode: read-only and write-only (visibility).
-        self._switch_lbl = QLabel("Switch:")
-        self._src_lbl = QLabel("Sender:")
-        self._timeout_lbl = QLabel("Timeout:")
-        self._value_lbl = QLabel("Value:")
-        self._type_lbl = QLabel("Type:")
-        self._opts_lbl = QLabel("Options:")
-        self._preview_lbl = QLabel("Preview:")
+        self._switch_lbl = QLabel(_("Switch:"))
+        self._src_lbl = QLabel(_("Sender:"))
+        self._timeout_lbl = QLabel(_("Timeout:"))
+        self._value_lbl = QLabel(_("Value:"))
+        self._type_lbl = QLabel(_("Type:"))
+        self._opts_lbl = QLabel(_("Options:"))
+        self._preview_lbl = QLabel(_("Preview:"))
         self._read_only = (self._switch_lbl, self._switch_combo, self._query_btn,
                            self._src_lbl, self._src_combo, self._timeout_lbl, self._timeout_spin)
         self._write_only = (self._value_lbl, self._value_edit, self._type_lbl, self._type_combo,
@@ -237,12 +241,12 @@ class QueryTab(QWidget):
         self._default_tips = {w: w.toolTip() for w in self._prod_off}
 
         form = QFormLayout()
-        form.addRow("Mode:", self._mode_combo)
-        form.addRow("Recipient:", self._member_combo)
+        form.addRow(_("Mode:"), self._mode_combo)
+        form.addRow(_("Recipient:"), self._member_combo)
         form.addRow(self._src_lbl, self._src_combo)
         form.addRow(self._timeout_lbl, self._timeout_spin)
-        form.addRow("Index:", self._index_edit)
-        form.addRow("Format:", self._format_combo)
+        form.addRow(_("Index:"), self._index_edit)
+        form.addRow(_("Format:"), self._format_combo)
         form.addRow(self._switch_lbl, self._switch_combo)
         form.addRow(self._value_lbl, self._value_edit)
         form.addRow(self._type_lbl, self._type_combo)
@@ -259,24 +263,24 @@ class QueryTab(QWidget):
         btn_row.addWidget(self._clear_btn)
         form.addRow("", btn_row)
 
-        query_box = QGroupBox("Query")
+        query_box = QGroupBox(_("Query"))
         query_box.setLayout(form)
 
-        result_box = QGroupBox("Last result")
+        result_box = QGroupBox(_("Last result"))
         result_layout = QVBoxLayout(result_box)
         result_layout.addWidget(self._info_label)
         result_layout.addWidget(self._hint_label)
         result_layout.addWidget(self._warn_label)
 
         self._table = QTableWidget(0, len(HEADERS))
-        self._table.setHorizontalHeaderLabels(HEADERS)
+        self._table.setHorizontalHeaderLabels(HEADER_LABELS)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.verticalHeader().setVisible(False)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(HEADERS.index("Name"), QHeaderView.Stretch)
 
-        history_box = QGroupBox(f"History (newest on top, max. {MAX_HISTORY})")
+        history_box = QGroupBox(_("History (newest on top, max. {count})").format(count=MAX_HISTORY))
         history_layout = QVBoxLayout(history_box)
         history_layout.addWidget(self._table)
 
@@ -310,7 +314,7 @@ class QueryTab(QWidget):
         """Query controls active for debug and production firmware; hint only for unknown."""
         self._fw = kind
         if kind not in (FW_DEBUG, FW_PROD) and self._seq is not None:
-            self._seq_abort("Query 'all' aborted: firmware status unknown.")
+            self._seq_abort(_("Query 'all' aborted: firmware status unknown."))
         self._write_pending = False  # firmware change: response to open write request uncertain
         self._disarm()
         if kind == FW_PROD:
@@ -377,8 +381,8 @@ class QueryTab(QWidget):
             self._preview_label.setStyleSheet("color: #c00000; font-weight: bold;")
         else:
             self._preview_label.setText(
-                f"Raw value: 0x{plan['raw']:04x} ({plan['raw']})   "
-                f"Frame: 0x{plan['can_id']:03x}  {bytes(plan['frame']).hex(' ')}"
+                _("Raw value: 0x{raw:04x} ({raw})   Frame: 0x{can_id:03x}  {frame}").format(
+                    raw=plan['raw'], can_id=plan['can_id'], frame=bytes(plan['frame']).hex(' '))
             )
             self._preview_label.setStyleSheet("")
         self._send_btn.setEnabled(
@@ -395,24 +399,24 @@ class QueryTab(QWidget):
         if index is None:
             return None, hint
         if not 0 <= index <= 0xFFFF:
-            return None, "Index must be between 0x0000 and 0xFFFF."
+            return None, _("Index must be between 0x0000 and 0xFFFF.")
         fmt = self._format_combo.currentData()
         type_name = self._effective_type(index)
         text = self._value_edit.text().strip()
         if not text:
-            return None, "Please enter a value."
+            return None, _("Please enter a value.")
         try:
             if self._raw_check.isChecked():
                 raw = _parse_raw_hex(text)
             else:
                 if not is_writable(type_name):
-                    return None, f"Type '{type_name}' is not writable."
+                    return None, _("Type '{type_name}' is not writable.").format(type_name=type_name)
                 raw = encode_value(type_name, text)
                 if not 0 <= raw <= 0xFFFF:
-                    raise ValueError("Raw value outside 0x0000..0xFFFF.")
+                    raise ValueError(_("Raw value outside 0x0000..0xFFFF."))
             can_id, frame = build_write_request(member, index, raw, fmt)
         except ValueError as exc:
-            return None, f"Invalid value: {exc}"
+            return None, _("Invalid value: {exc}").format(exc=exc)
         return {"member": member, "index": index, "type": type_name, "fmt": fmt,
                 "raw": raw, "can_id": can_id, "frame": frame, "text": text}, ""
 
@@ -429,27 +433,28 @@ class QueryTab(QWidget):
         sig = self._db.signal_by_index(index)
         name = sig.get("name", self._db.signal_name(index)) if sig else self._db.signal_name(index)
         lines = [
-            "Send write command?",
-            f"Member: {self._db.member_name(member)} (0x{member:03x})",
-            f"Index: 0x{index:04x} {name}",
-            f"Type: {plan['type']}",
-            f"New value: {self._decode(plan['type'], plan['raw'], index)}",
-            f"Raw value: 0x{plan['raw']:04x} ({plan['raw']})",
-            f"Frame: 0x{plan['can_id']:03x}  {bytes(plan['frame']).hex(' ')}",
+            _("Send write command?"),
+            _("Member: {name} (0x{member:03x})").format(name=self._db.member_name(member), member=member),
+            _("Index: 0x{index:04x} {name}").format(index=index, name=name),
+            _("Type: {type}").format(type=plan['type']),
+            _("New value: {value}").format(value=self._decode(plan['type'], plan['raw'], index)),
+            _("Raw value: 0x{raw:04x} ({raw})").format(raw=plan['raw']),
+            _("Frame: 0x{can_id:03x}  {frame}").format(can_id=plan['can_id'],
+                                                      frame=bytes(plan['frame']).hex(' ')),
         ]
         if self._fw == FW_PROD:
             lines.insert(1, PROD_CONFIRM_LINE)
         last = self._last_read.get((member, index))
         if last is not None:
-            lines.append(f"Last read value: {last}")
+            lines.append(_("Last read value: {value}").format(value=last))
         if self._db.member_by_id(member) is None:
-            lines.append("Warning: unknown member")
+            lines.append(_("Warning: unknown member"))
         if sig is None:
-            lines.append("Warning: unknown signal")
+            lines.append(_("Warning: unknown signal"))
         return "\n".join(lines)
 
     def _confirm_write(self, text: str) -> bool:
-        answer = QMessageBox.question(self, "Confirm write", text,
+        answer = QMessageBox.question(self, _("Confirm write"), text,
                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         return answer == QMessageBox.Yes
 
@@ -465,13 +470,14 @@ class QueryTab(QWidget):
         try:
             self._bridge.send_write(plan["member"], plan["index"], plan["raw"], plan["fmt"])
         except ValueError as exc:
-            self._hint_label.setText(f"Send rejected: {exc}")
+            self._hint_label.setText(_("Send rejected: {exc}").format(exc=exc))
             return
         self._write_pending = True
         self._warn_label.setText("")
         self._info_label.setText(
-            f"Write request sent: member 0x{plan['member']:03x}, index 0x{plan['index']:04x}, "
-            f"raw value 0x{plan['raw']:04x} ..."
+            _("Write request sent: member 0x{member:03x}, index 0x{index:04x}, "
+              "raw value 0x{raw:04x} ...").format(member=plan['member'], index=plan['index'],
+                                                  raw=plan['raw'])
         )
         self._update_write_ui()
 
@@ -497,16 +503,19 @@ class QueryTab(QWidget):
         if member is not None and readback is not None and status != "timeout":
             self._last_read[(member, index)] = f"{readback_text} (0x{readback:04x})"
         self._info_label.setText(
-            f"Write: {name}\n"
-            f"Member: {member_text}   Index: 0x{index:04x}   Type: {type_name}\n"
-            f"Sent: {value_hex} ({value_dec})   Value: {sent_text}\n"
-            f"Ack: {ack_text}   Readback value: {readback_text}\n"
-            f"Status: {status}"
+            _("Write: {name}\n"
+              "Member: {member}   Index: 0x{index:04x}   Type: {type_name}\n"
+              "Sent: {value_hex} ({value_dec})   Value: {sent_text}\n"
+              "Ack: {ack}   Readback value: {readback}\n"
+              "Status: {status}").format(
+                name=name, member=member_text, index=index, type_name=type_name,
+                value_hex=value_hex, value_dec=value_dec, sent_text=sent_text,
+                ack=ack_text, readback=readback_text, status=status)
         )
         self._warn_label.setText(REJECTED_TEXT if status == "rejected" else "")
         self._add_history_row([
             datetime.now().strftime("%H:%M:%S"),
-            "Write",
+            _("Write"),
             member_text,
             f"0x{index:04x}",
             "",
@@ -530,7 +539,7 @@ class QueryTab(QWidget):
         Returns (can_id, '') or (None, hint)."""
         text = text.strip()
         if not text:
-            return None, "Please enter a member (name, 0x-hex or number)."
+            return None, _("Please enter a member (name, 0x-hex or number).")
         value = None
         m = _MEMBER_LABEL_RE.search(text)
         if m:
@@ -543,11 +552,11 @@ class QueryTab(QWidget):
                         value = _to_int(member.get("can_id"))
                         break
         if value is None:
-            return None, (f"Member '{text}' unknown: enter reference name, 0x-hex (0x4ab) or number.")
+            return None, (_("Member '{text}' unknown: enter reference name, 0x-hex (0x4ab) or number.").format(text=text))
         if value == OWN_CAN_ID:
-            return None, "Member 0x680 is the own ID and not allowed."
+            return None, _("Member 0x680 is the own ID and not allowed.")
         if not 0 <= value <= 0x7FF:
-            return None, f"Member 0x{value:x} outside 0x000..0x7FF."
+            return None, _("Member 0x{value:x} outside 0x000..0x7FF.").format(value=value)
         return value, ""
 
     def _parse_src(self) -> tuple[int | None, str]:
@@ -561,7 +570,7 @@ class QueryTab(QWidget):
                     value = _to_int(member.get("can_id"))
                     break
         if value is None or not 0 <= value <= 0x7FF:
-            return None, f"Sender '{text}' invalid: 0x000..0x7FF as hex, number or reference name."
+            return None, _("Sender '{text}' invalid: 0x000..0x7FF as hex, number or reference name.").format(text=text)
         return value, ""
 
     def _read_extra(self) -> dict:
@@ -588,7 +597,7 @@ class QueryTab(QWidget):
         """Hex index or name search. Returns (index, hint) or (None, error text)."""
         text = text.strip()
         if not text:
-            return None, "Please enter an index or signal name."
+            return None, _("Please enter an index or signal name.")
         if _HEX_RE.match(text):
             return int(text, 16), ""
         # allow selection from completer format "NAME (0x....)"
@@ -597,15 +606,16 @@ class QueryTab(QWidget):
             return int(m.group(1), 16), ""
         matches = self._db.search_signals(text)
         if not matches:
-            return None, f"No signal found for '{text}'."
+            return None, _("No signal found for '{text}'.").format(text=text)
         exact = [s for s in matches if s.get("name", "").lower() == text.lower()]
         chosen = (exact or matches)[0]
         idx = _to_int(chosen.get("index_int"))
         if idx is None:
-            return None, f"Signal '{chosen.get('name')}' has no valid index."
-        hint = f"Name search: {chosen.get('name')} (0x{idx:04x})"
+            return None, _("Signal '{name}' has no valid index.").format(name=chosen.get('name'))
+        hint = _("Name search: {name} (0x{idx:04x})").format(name=chosen.get('name'), idx=idx)
         if len(matches) > 1:
-            hint += f" – {len(matches) - 1} more matches, please enter more precisely or choose a suggestion"
+            hint += _(" – {count} more matches, please enter more precisely or choose a suggestion").format(
+                count=len(matches) - 1)
         return idx, hint
 
     def _decode(self, type_name: str, raw, index: int | None = None):
@@ -616,7 +626,7 @@ class QueryTab(QWidget):
                 return self._db.decode(index, raw, type_name)
             return decode_value(type_name, raw)
         except Exception as exc:  # decoder must not crash the GUI
-            return f"Error: {exc}"
+            return _("Error: {exc}").format(exc=exc)
 
     # ----- Slots -----------------------------------------------------------
 
@@ -634,19 +644,19 @@ class QueryTab(QWidget):
             self._hint_label.setText(hint)
             return
         if not 0 <= index <= 0xFFFF:
-            self._hint_label.setText("Index must be between 0x0000 and 0xFFFF.")
+            self._hint_label.setText(_("Index must be between 0x0000 and 0xFFFF."))
             return
         fmt = self._format_combo.currentData()
         switch = self._switch_combo.currentData()
         if fmt == "short" and index > 0xFF:
-            self._hint_label.setText("Short format only for index up to 0xFF; please choose format auto or long.")
+            self._hint_label.setText(_("Short format only for index up to 0xFF; please choose format auto or long."))
             return
         src, src_error = self._parse_src()
         if src is None:
             self._hint_label.setText(src_error)
             return
         if src == member:
-            self._hint_label.setText("Sender and recipient must not be the same.")
+            self._hint_label.setText(_("Sender and recipient must not be the same."))
             return
         self._read_src = src
         self._read_timeout = self._timeout_spin.value()
@@ -655,8 +665,8 @@ class QueryTab(QWidget):
             self._start_sequence(member, index, fmt)
             return
         self._alle_key = None  # single query: summary line of 'alle' no longer current
-        self._info_label.setText(f"Request sent: recipient 0x{member:03x}, sender 0x{src:03x}, "
-                                 f"index 0x{index:04x} ...")
+        self._info_label.setText(_("Request sent: recipient 0x{member:03x}, sender 0x{src:03x}, "
+                                   "index 0x{index:04x} ...").format(member=member, src=src, index=index))
         self._pending = (member, index, switch)
         self._bridge.send_read(member, index, fmt, switch, **self._read_extra())
 
@@ -685,7 +695,7 @@ class QueryTab(QWidget):
             return
         self._seq = None
         self._apply_lock()
-        self._hint_label.setText("Query 'all' completed.")
+        self._hint_label.setText(_("Query 'all' completed."))
 
     def _seq_abort(self, text: str) -> None:
         self._seq_timer.stop()
@@ -706,7 +716,7 @@ class QueryTab(QWidget):
         parts = []
         for label, sw in SUMMARY_LABELS:
             value = self._alle_results.get(sw)
-            parts.append(f"{label}: {value if value is not None else '-'}")
+            parts.append(_("{label}: {value}").format(label=label, value=value if value is not None else '-'))
         return " | ".join(parts)
 
     @staticmethod
@@ -714,7 +724,7 @@ class QueryTab(QWidget):
         if status == "ok":
             return value_text
         if status == "unsupported":
-            return "not supported"
+            return _("not supported")
         if status == "timeout":
             return NO_ANSWER
         return STATUS_TEXT.get(status, status) or NO_ANSWER
@@ -767,22 +777,25 @@ class QueryTab(QWidget):
         # "Last result" field; other switch responses only appear in the history.
         elif self._pending == (member, index, switch):
             self._info_label.setText(
-                f"Name: {name}\n"
-                f"Recipient: {member_text}{src_text}   Index: 0x{index:04x}   Switch: {sw_text or 'current'}\n"
-                f"Type: {type_name}\n"
-                f"Raw: {raw_hex} ({raw_dec})   Value: {value_text}\n"
-                f"Status: {status_text}"
+                _("Name: {name}\n"
+                  "Recipient: {member}{src}   Index: 0x{index:04x}   Switch: {switch}\n"
+                  "Type: {type_name}\n"
+                  "Raw: {raw_hex} ({raw_dec})   Value: {value_text}\n"
+                  "Status: {status}").format(
+                    name=name, member=member_text, src=src_text, index=index,
+                    switch=sw_text or _("current"), type_name=type_name, raw_hex=raw_hex,
+                    raw_dec=raw_dec, value_text=value_text, status=status_text)
             )
         elif self._pending is not None:
             self._hint_label.setText(
-                f"Response for index 0x{index:04x}, switch {sw_text or 'current'} only appears in the history "
-                "(does not match the last query)."
+                _("Response for index 0x{index:04x}, switch {switch} only appears in the history "
+                  "(does not match the last query).").format(index=index, switch=sw_text or _("current"))
             )
 
         self._add_history_row(
             [
                 datetime.now().strftime("%H:%M:%S"),
-                "Read" + src_text,
+                _("Read") + src_text,
                 member_text,
                 f"0x{index:04x}",
                 sw_text,

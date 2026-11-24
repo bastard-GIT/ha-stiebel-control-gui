@@ -24,7 +24,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-COLUMNS = ["Index", "Name Ref", "Name mk-git", "Status", "Member", "Min/Max", "Type mismatch"]
+from i18n import _
+
+COLUMNS = [_("Index"), _("Name Ref"), _("Name mk-git"), _("Status"), _("Member"), _("Min/Max"), _("Type mismatch")]
 COL_INDEX, COL_NAME_REF, COL_NAME_MK, COL_STATUS, COL_MEMBER, COL_MINMAX, COL_TYPE = range(7)
 NUMERIC_COLS = (COL_INDEX, COL_MEMBER)
 RIGHT_ALIGNED_COLS = NUMERIC_COLS
@@ -38,7 +40,16 @@ STATUS_COLORS = {
     ST_MK: QColor(230, 180, 0, 70),
     ST_UNK: QColor(220, 53, 69, 60),
 }
-STATUS_CHOICES = (("all", None), ("Reference", ST_REF), ("only mk-git", ST_MK), ("unknown", ST_UNK))
+
+
+def _status_text(status: str) -> str:
+    """Display text of a status value; the value itself stays the English key (used in filters and logic)."""
+    if status == ST_REF:
+        return _("Reference")
+    if status == ST_MK:
+        return _("only mk-git")
+    return _("unknown")
+
 
 
 @dataclass
@@ -83,12 +94,14 @@ class IndexBrowser(QWidget):
 
     def _build_ui(self) -> None:
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Index (0x...) or name")
+        self._search.setPlaceholderText(_("Index (0x...) or name"))
         self._status = QComboBox()
-        for label, value in STATUS_CHOICES:
-            self._status.addItem(label, value)
-        self._only_minmax = QCheckBox("only with min/max")
-        self._only_diff = QCheckBox("only type mismatch")
+        self._status.addItem(_("all"), None)
+        self._status.addItem(_status_text(ST_REF), ST_REF)
+        self._status.addItem(_status_text(ST_MK), ST_MK)
+        self._status.addItem(_status_text(ST_UNK), ST_UNK)
+        self._only_minmax = QCheckBox(_("only with min/max"))
+        self._only_diff = QCheckBox(_("only type mismatch"))
         self._count = QLabel()
 
         filters = QHBoxLayout()
@@ -98,9 +111,9 @@ class IndexBrowser(QWidget):
         filters.addWidget(self._only_diff)
         filters.addWidget(self._count)
 
-        self._back_btn = QPushButton("Back")
-        self._next_btn = QPushButton("Next")
-        self._unknown_btn = QPushButton("Next unknown")
+        self._back_btn = QPushButton(_("Back"))
+        self._next_btn = QPushButton(_("Next"))
+        self._unknown_btn = QPushButton(_("Next unknown"))
         nav = QHBoxLayout()
         nav.addWidget(self._back_btn)
         nav.addWidget(self._next_btn)
@@ -170,10 +183,10 @@ class IndexBrowser(QWidget):
             f"0x{rec.index:04x}",
             rec.name_ref,
             rec.name_mk,
-            rec.status,
+            _status_text(rec.status),
             str(rec.members),
-            "yes" if rec.has_minmax else "no",
-            "yes" if rec.type_diff else "no",
+            _("yes") if rec.has_minmax else _("no"),
+            _("yes") if rec.type_diff else _("no"),
         ]
 
     def _set_row(self, row: int, rec: _Row) -> None:
@@ -203,8 +216,9 @@ class IndexBrowser(QWidget):
         return item.data(Qt.UserRole) if item is not None else None
 
     def _row_status(self, row: int) -> str:
-        item = self._table.item(row, COL_STATUS)
-        return item.text() if item is not None else ""
+        # Status value (English key), not the translated cell text.
+        rec = self._recs.get(self._row_index(row))
+        return rec.status if rec is not None else ""
 
     # ---------- Filter ----------
 
@@ -223,7 +237,7 @@ class IndexBrowser(QWidget):
                     and (not only_diff or rec.type_diff))
             self._table.setRowHidden(row, not show)
             visible += int(show)
-        self._count.setText(f"{visible} of {len(self._recs)} indices")
+        self._count.setText(_("{visible} of {total} indices").format(visible=visible, total=len(self._recs)))
 
     # ---------- Navigation ----------
 

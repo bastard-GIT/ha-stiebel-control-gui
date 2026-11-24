@@ -31,40 +31,42 @@ from PySide6.QtWidgets import (
 import prod_api
 from elster import ElsterDb, decode_value, switch_label
 from export_io import save_scan_csv
+from i18n import _
 from mqtt_client import FW_DEBUG, FW_PROD, FW_UNKNOWN, MqttBridge
 
+# Display texts are translated at import (the language is set before the tabs load).
 FW_LOCK_TEXT = {
-    FW_UNKNOWN: "Waiting for firmware status...",
+    FW_UNKNOWN: _("Waiting for firmware status..."),
 }
 MAX_RANGE = 4096
 MIN_DELAY_MS = 100
 DEFAULT_DELAY_MS = 200
-COLUMNS = ["Index", "Switch", "Name", "Raw value", "Status", "Decoded"]
+COLUMNS = [_("Index"), _("Switch"), _("Name"), _("Raw value"), _("Status"), _("Decoded")]
 RIGHT_ALIGNED_COLS = (0, 3)  # Index, raw value
 DEFAULT_SWITCH = 0xFA
 
 # Production: fixed pace, no pause (send_scan ignores delay_ms)
 PROD_MS_PER_ID = 150
-PROD_FORMAT_TEXT = ("Not available in production mode: format short/long exists only with "
-                    "debug firmware, selection is auto.")
-PROD_DELAY_TEXT = ("Not available in production mode: the pace is fixed at 150 ms, "
-                   "no pause.")
-PROD_MEMBER_TEXT = "Only with production firmware (scan/members)"
+PROD_FORMAT_TEXT = _("Not available in production mode: format short/long exists only with "
+                     "debug firmware, selection is auto.")
+PROD_DELAY_TEXT = _("Not available in production mode: the pace is fixed at 150 ms, "
+                    "no pause.")
+PROD_MEMBER_TEXT = _("Only with production firmware (scan/members)")
 
 # Member search (production)
 MEMBER_ID_MAX = 0x7FF
 MEMBER_DEFAULT_FROM = "0x000"
 MEMBER_DEFAULT_TO = "0x7ff"
 MEMBER_DEFAULT_INDEX = "0x000b"
-MEMBER_COLUMNS = ["ID", "Name", "Index", "Raw hex", "Raw dec"]
+MEMBER_COLUMNS = [_("ID"), _("Name"), _("Index"), _("Raw hex"), _("Raw dec")]
 MEMBER_RIGHT_ALIGNED_COLS = (3, 4)
 MEMBER_CSV_HEADER = ["id", "name", "index", "raw"]
 RAW_NOT_SUPPORTED = 0x8000  # response "not supported"
 
 # Display -> parameter for send_scan (INTERFACES 8.3)
-FORMAT_CHOICES = (("auto", "auto"), ("short", "short"), ("long", "long"))
+FORMAT_CHOICES = ((_("auto"), "auto"), (_("short"), "short"), (_("long"), "long"))
 SWITCH_ALL = "alle"  # three scans in sequence, no firmware option
-SWITCH_CHOICES = (("current", 0xFA), ("min", 0xF8), ("max", 0xF9), ("all", SWITCH_ALL))
+SWITCH_CHOICES = ((_("current"), 0xFA), (_("min"), 0xF8), (_("max"), 0xF9), (_("all"), SWITCH_ALL))
 SEQ_SWITCHES = (0xFA, 0xF8, 0xF9)  # order for 'alle' (all)
 
 
@@ -134,8 +136,8 @@ class ScannerTab(QWidget):
     def _build_ui(self) -> None:
         self._member = QComboBox()
         self._member_hex = QLineEdit()
-        self._member_hex.setPlaceholderText("e.g. 0x7ff")
-        self._member_hex.setToolTip("Optional: hex ID instead of the selection above (0x000-0x7FF, without 0x680).")
+        self._member_hex.setPlaceholderText(_("e.g. 0x7ff"))
+        self._member_hex.setToolTip(_("Optional: hex ID instead of the selection above (0x000-0x7FF, without 0x680)."))
         self._from = QLineEdit("0x4e00")
         self._to = QLineEdit("0x4fff")
         self._format = QComboBox()
@@ -150,13 +152,13 @@ class ScannerTab(QWidget):
         self._delay.setSuffix(" ms")
 
         form = QFormLayout()
-        form.addRow("Member:", self._member)
-        form.addRow("or hex ID:", self._member_hex)
-        form.addRow("From (hex):", self._from)
-        form.addRow("To (hex):", self._to)
-        form.addRow("Format:", self._format)
-        form.addRow("Switch:", self._switch)
-        form.addRow("Delay:", self._delay)
+        form.addRow(_("Member:"), self._member)
+        form.addRow(_("or hex ID:"), self._member_hex)
+        form.addRow(_("From (hex):"), self._from)
+        form.addRow(_("To (hex):"), self._to)
+        form.addRow(_("Format:"), self._format)
+        form.addRow(_("Switch:"), self._switch)
+        form.addRow(_("Delay:"), self._delay)
 
         self._estimate = QLabel()
         for edit in (self._from, self._to):
@@ -164,8 +166,8 @@ class ScannerTab(QWidget):
         self._delay.valueChanged.connect(self._update_estimate)
         self._switch.currentIndexChanged.connect(self._update_estimate)
 
-        self._start_btn = QPushButton("Start")
-        self._stop_btn = QPushButton("Stop")
+        self._start_btn = QPushButton(_("Start"))
+        self._stop_btn = QPushButton(_("Stop"))
         self._stop_btn.setEnabled(False)
         self._start_btn.clicked.connect(self._on_start)
         self._stop_btn.clicked.connect(self._on_stop)
@@ -174,10 +176,10 @@ class ScannerTab(QWidget):
         self._progress.setValue(0)
         self._progress.setFormat("%v / %m")
 
-        self._only_ok = QCheckBox("responses only (ok)")
+        self._only_ok = QCheckBox(_("responses only (ok)"))
         self._only_ok.toggled.connect(self._rebuild_table)
 
-        self._export_btn = QPushButton("Export CSV")
+        self._export_btn = QPushButton(_("Export CSV"))
         self._export_btn.clicked.connect(self._on_export)
 
         buttons = QHBoxLayout()
@@ -194,7 +196,7 @@ class ScannerTab(QWidget):
         self._table.verticalHeader().setVisible(False)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-        settings = QGroupBox("Scan parameters")
+        settings = QGroupBox(_("Scan parameters"))
         settings.setLayout(form)
 
         self._fw_label = QLabel("")
@@ -210,14 +212,14 @@ class ScannerTab(QWidget):
         for edit in (self._mem_from, self._mem_to, self._mem_index):
             edit.textChanged.connect(self._update_member_estimate)
         mem_form = QFormLayout()
-        mem_form.addRow("ID from (hex):", self._mem_from)
-        mem_form.addRow("ID to (hex):", self._mem_to)
-        mem_form.addRow("Index (hex):", self._mem_index)
+        mem_form.addRow(_("ID from (hex):"), self._mem_from)
+        mem_form.addRow(_("ID to (hex):"), self._mem_to)
+        mem_form.addRow(_("Index (hex):"), self._mem_index)
 
         self._mem_estimate = QLabel()
         self._mem_estimate.setWordWrap(True)
-        self._mem_start_btn = QPushButton("Search")
-        self._mem_stop_btn = QPushButton("Stop")
+        self._mem_start_btn = QPushButton(_("Search"))
+        self._mem_stop_btn = QPushButton(_("Stop"))
         self._mem_stop_btn.setEnabled(False)
         self._mem_start_btn.clicked.connect(self._on_member_start)
         self._mem_stop_btn.clicked.connect(self._on_member_stop)
@@ -226,7 +228,7 @@ class ScannerTab(QWidget):
         self._mem_progress.setValue(0)
         self._mem_progress.setFormat("%v / %m")
 
-        self._mem_export_btn = QPushButton("Export as CSV")
+        self._mem_export_btn = QPushButton(_("Export as CSV"))
         self._mem_export_btn.clicked.connect(self._on_member_export)
 
         mem_buttons = QHBoxLayout()
@@ -243,7 +245,7 @@ class ScannerTab(QWidget):
         self._mem_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._mem_table.itemDoubleClicked.connect(self._on_member_double_click)
 
-        member_box = QGroupBox("Member search (production)")
+        member_box = QGroupBox(_("Member search (production)"))
         member_layout = QVBoxLayout(member_box)
         member_layout.addLayout(mem_form)
         member_layout.addWidget(self._mem_estimate)
@@ -302,26 +304,30 @@ class ScannerTab(QWidget):
     def _update_estimate(self, *_args) -> None:
         rng = self._range()
         if rng is None:
-            self._estimate.setText("Range invalid (hex 0000-FFFF, from <= to).")
+            self._estimate.setText(_("Range invalid (hex 0000-FFFF, from <= to)."))
             return
         per_scan = rng[1] - rng[0] + 1
         scans = self._scan_count()
         total = per_scan * scans
         ms = self._ms_per_id()
         seconds = total * ms / 1000.0
-        prefix = f"{scans} scans x {per_scan} indices = " if scans > 1 else ""
-        self._estimate.setText(f"{prefix}{total} indices x {ms} ms = approx. {seconds:.1f} s")
+        prefix = (_("{scans} scans x {per_scan} indices = ").format(scans=scans, per_scan=per_scan)
+                  if scans > 1 else "")
+        self._estimate.setText(
+            _("{prefix}{total} indices x {ms} ms = approx. {seconds:.1f} s").format(
+                prefix=prefix, total=total, ms=ms, seconds=seconds))
 
     def _update_member_estimate(self, *_args) -> None:
         rng = self._member_range()
         if rng is None:
             self._mem_estimate.setText(
-                "Range invalid (ID hex 000-7FF, from <= to; index hex 0000-FFFF).")
+                _("Range invalid (ID hex 000-7FF, from <= to; index hex 0000-FFFF)."))
             return
         count = rng[1] - rng[0] + 1
         seconds = count * PROD_MS_PER_ID / 1000.0
         self._mem_estimate.setText(
-            f"Duration: approx. {PROD_MS_PER_ID} ms per ID; {count} IDs = approx. {seconds:.0f} s.")
+            _("Duration: approx. {ms} ms per ID; {count} IDs = approx. {seconds:.0f} s.").format(
+                ms=PROD_MS_PER_ID, count=count, seconds=seconds))
 
     def _set_scanning(self, active: bool) -> None:
         self._scanning = active
@@ -414,7 +420,7 @@ class ScannerTab(QWidget):
     def _member_display_name(self, item: dict) -> str:
         name = self._member_name(item["id"])
         if item["raw"] == RAW_NOT_SUPPORTED:
-            name += " (not supported)"
+            name += _(" (not supported)")
         return name
 
     def _member_row(self, item: dict) -> list[str]:
@@ -441,12 +447,12 @@ class ScannerTab(QWidget):
         if text.strip():
             member = parse_member_id(text)
             if member is None:
-                QMessageBox.warning(self, "Input",
-                                    "Invalid hex ID: 0x000-0x7FF, without 0x680 (PC).")
+                QMessageBox.warning(self, _("Input"),
+                                    _("Invalid hex ID: 0x000-0x7FF, without 0x680 (PC)."))
             return member
         member = self._member.currentData()
         if member is None:
-            QMessageBox.warning(self, "Input", "No member selected.")
+            QMessageBox.warning(self, _("Input"), _("No member selected."))
         return member
 
     # ---------- Actions: range scan ----------
@@ -454,7 +460,7 @@ class ScannerTab(QWidget):
     def _on_start(self) -> None:
         rng = self._range()
         if rng is None:
-            QMessageBox.warning(self, "Input", "Range invalid (hex 0000-FFFF, from <= to).")
+            QMessageBox.warning(self, _("Input"), _("Range invalid (hex 0000-FFFF, from <= to)."))
             return
         member = self._selected_member()
         if member is None:
@@ -467,21 +473,27 @@ class ScannerTab(QWidget):
         if fmt == "short" and end > 0xFF:
             QMessageBox.warning(
                 self,
-                "Input",
-                "Short format only for indices up to 0xFF. Please select format auto or long, "
-                "or limit the range.",
+                _("Input"),
+                _("Short format only for indices up to 0xFF. Please select format auto or long, "
+                  "or limit the range."),
             )
             return
         count = end - start + 1
         scans = self._scan_count()
         total = count * scans
         if total > MAX_RANGE:
+            if scans > 1:
+                text = _("The range covers {total} indices (limit {limit}) over {scans} scans. "
+                         "The scan may take a very long time.\n\nStart anyway?").format(
+                             total=total, limit=MAX_RANGE, scans=scans)
+            else:
+                text = _("The range covers {total} indices (limit {limit}). "
+                         "The scan may take a very long time.\n\nStart anyway?").format(
+                             total=total, limit=MAX_RANGE)
             answer = QMessageBox.warning(
                 self,
-                "Large range",
-                f"The range covers {total} indices (limit {MAX_RANGE})"
-                + (f" over {scans} scans" if scans > 1 else "") + ". "
-                "The scan may take a very long time.\n\nStart anyway?",
+                _("Large range"),
+                text,
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -571,26 +583,26 @@ class ScannerTab(QWidget):
 
     def _on_export(self) -> None:
         if not self._items:
-            QMessageBox.information(self, "Export", "No results to export.")
+            QMessageBox.information(self, _("Export"), _("No results to export."))
             return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export CSV", "scan.csv", "CSV (*.csv)"
+        path, _unused = QFileDialog.getSaveFileName(
+            self, _("Export CSV"), "scan.csv", "CSV (*.csv)"
         )
         if not path:
             return
         try:
             save_scan_csv(path, list(self._items.values()), self._db)
         except OSError as exc:
-            QMessageBox.critical(self, "Export", f"Save failed:\n{exc}")
+            QMessageBox.critical(self, _("Export"), _("Save failed:\n{exc}").format(exc=exc))
 
     # ---------- Actions: member search (production) ----------
 
     def _on_member_start(self) -> None:
         rng = self._member_range()
         if rng is None:
-            QMessageBox.warning(self, "Member search",
-                                "Range invalid (ID hex 000-7FF, from <= to; "
-                                "index hex 0000-FFFF).")
+            QMessageBox.warning(self, _("Member search"),
+                                _("Range invalid (ID hex 000-7FF, from <= to; "
+                                  "index hex 0000-FFFF)."))
             return
         lo, hi, index = rng
         self._member_items.clear()
@@ -602,7 +614,7 @@ class ScannerTab(QWidget):
             self._bridge.send_member_scan(lo, hi, index)
         except ValueError as exc:
             self._set_member_scanning(False)
-            QMessageBox.warning(self, "Member search", str(exc))
+            QMessageBox.warning(self, _("Member search"), str(exc))
 
     def _on_member_stop(self) -> None:
         self._bridge.send_stop()
@@ -632,10 +644,10 @@ class ScannerTab(QWidget):
 
     def _on_member_export(self) -> None:
         if not self._member_items:
-            QMessageBox.information(self, "Export", "No results to export.")
+            QMessageBox.information(self, _("Export"), _("No results to export."))
             return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export CSV", "members.csv", "CSV (*.csv)"
+        path, _unused = QFileDialog.getSaveFileName(
+            self, _("Export CSV"), "members.csv", "CSV (*.csv)"
         )
         if not path:
             return
@@ -647,4 +659,4 @@ class ScannerTab(QWidget):
         try:
             save_member_csv(path, rows)
         except OSError as exc:
-            QMessageBox.critical(self, "Export", f"Save failed:\n{exc}")
+            QMessageBox.critical(self, _("Export"), _("Save failed:\n{exc}").format(exc=exc))

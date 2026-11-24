@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from i18n import _
 from mqtt_client import FW_DEBUG, FW_PROD, MqttBridge
 
 COLOR_OK = "#2e7d32"
@@ -44,7 +45,8 @@ def _colored(label: QLabel, text: str, color: str | None = None, bold: bool = Fa
     label.setStyleSheet(" ".join(style))
 
 
-SOURCE_LABELS = {"debug": "Debug", "produktiv": "Production"}
+# Display only (never compared): translated at import, the language is set before the tabs load.
+SOURCE_LABELS = {"debug": _("Debug"), "produktiv": _("Production")}
 
 
 def source_label(source: str | None) -> str:
@@ -52,12 +54,12 @@ def source_label(source: str | None) -> str:
     return SOURCE_LABELS.get(source or "", "-")
 
 
-FIRMWARE_LABELS = {FW_DEBUG: "Debug", FW_PROD: "Production"}
+FIRMWARE_LABELS = {FW_DEBUG: _("Debug"), FW_PROD: _("Production")}
 
 
 def firmware_label(kind: str | None) -> str:
     """Display name of the firmware kind; debug/prod/other -> Debug/Production/unknown."""
-    return FIRMWARE_LABELS.get(kind or "", "unknown")
+    return FIRMWARE_LABELS.get(kind or "", _("unknown"))
 
 
 class StatusTab(QWidget):
@@ -89,23 +91,23 @@ class StatusTab(QWidget):
         self._lbl_bus_off = QLabel("-")
         self._lbl_heap = QLabel("-")
 
-        _colored(self._lbl_avail, "unknown", COLOR_NEUTRAL)
-        _colored(self._lbl_conn, "disconnected", COLOR_NEUTRAL)
+        _colored(self._lbl_avail, _("unknown"), COLOR_NEUTRAL)
+        _colored(self._lbl_conn, _("disconnected"), COLOR_NEUTRAL)
 
         form = QFormLayout()
-        form.addRow("Availability:", self._lbl_avail)
-        form.addRow("Firmware:", self._lbl_fw)
-        form.addRow("Source:", self._lbl_source)
-        form.addRow("MQTT connection:", self._lbl_conn)
-        form.addRow("RX frames (total):", self._lbl_rx)
-        form.addRow("TX frames (total):", self._lbl_tx)
-        form.addRow("Frames/s (RX):", self._lbl_fps)
-        form.addRow("RX buffer:", self._bar_rx)
-        form.addRow("RX buffer used:", self._lbl_rx_fill)
-        form.addRow("Overflow:", self._lbl_overflow)
-        form.addRow("TWAI errors:", self._lbl_twai)
-        form.addRow("Bus-Off:", self._lbl_bus_off)
-        form.addRow("Heap (bytes):", self._lbl_heap)
+        form.addRow(_("Availability:"), self._lbl_avail)
+        form.addRow(_("Firmware:"), self._lbl_fw)
+        form.addRow(_("Source:"), self._lbl_source)
+        form.addRow(_("MQTT connection:"), self._lbl_conn)
+        form.addRow(_("RX frames (total):"), self._lbl_rx)
+        form.addRow(_("TX frames (total):"), self._lbl_tx)
+        form.addRow(_("Frames/s (RX):"), self._lbl_fps)
+        form.addRow(_("RX buffer:"), self._bar_rx)
+        form.addRow(_("RX buffer used:"), self._lbl_rx_fill)
+        form.addRow(_("Overflow:"), self._lbl_overflow)
+        form.addRow(_("TWAI errors:"), self._lbl_twai)
+        form.addRow(_("Bus-Off:"), self._lbl_bus_off)
+        form.addRow(_("Heap (bytes):"), self._lbl_heap)
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
@@ -127,17 +129,17 @@ class StatusTab(QWidget):
 
     def _on_availability(self, text: str) -> None:
         if text == "online":
-            _colored(self._lbl_avail, "online", COLOR_OK)
+            _colored(self._lbl_avail, _("online"), COLOR_OK)
         elif text == "offline":
-            _colored(self._lbl_avail, "offline", COLOR_WARN)
+            _colored(self._lbl_avail, _("offline"), COLOR_WARN)
         else:
             _colored(self._lbl_avail, str(text), COLOR_NEUTRAL)
 
     def _on_connected(self, ok: bool) -> None:
         if ok:
-            _colored(self._lbl_conn, "connected", COLOR_OK)
+            _colored(self._lbl_conn, _("connected"), COLOR_OK)
         else:
-            _colored(self._lbl_conn, "disconnected", COLOR_WARN)
+            _colored(self._lbl_conn, _("disconnected"), COLOR_WARN)
 
     def _on_status(self, st: dict) -> None:
         """Show status message. Missing or invalid fields (production firmware only sends fw, rx,
@@ -201,8 +203,8 @@ class StatusTab(QWidget):
         if bus_off is None:
             _colored(self._lbl_bus_off, "-")
         elif bool(bus_off):
-            _colored(self._lbl_bus_off, "YES", COLOR_WARN)
+            _colored(self._lbl_bus_off, _("YES"), COLOR_WARN)
         else:
-            _colored(self._lbl_bus_off, "no", COLOR_OK)
+            _colored(self._lbl_bus_off, _("no"), COLOR_OK)
 
         self._lbl_heap.setText(_show(heap))

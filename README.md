@@ -68,10 +68,16 @@ python -I -m pytest tests
 
 The tests run without a broker; the MQTT transport is replaced by fakes.
 
-## 7. Note on debug mode
+## 7. Language
+
+The GUI is available in English (default) and German. Choose it in the menu **Language**; the choice is saved and applies after restarting the application. `STIEBEL_GUI_LANG=de` (or `en`) overrides the saved choice for one run.
+
+Add a language: copy the key list with `python -I tools/i18n_check.py --keys`, translate the values into `gui/locales/<code>.json` (keep the `{placeholders}` unchanged), add the code to `LANGUAGE_NAMES` in `gui/i18n.py`, then check with `python -I tools/i18n_check.py` (missing, unused keys, placeholder mismatch). In code, user-visible text is wrapped as `_("English text")`; the English text is the key. Tests always run in English.
+
+## 8. Note on debug mode
 
 The debug firmware mode (topic prefix `stiebel-debug/`) is legacy. The goal is the upstream API (`heatingpump/…`, interface described in [docs/INTERFACES.md](docs/INTERFACES.md), section 13).
 
-## 8. License
+## 9. License
 
 GPL-3.0, see [LICENSE](LICENSE).
