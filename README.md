@@ -1,20 +1,22 @@
+[Deutsch](README.de.md)
+
 # ha-stiebel-control-gui
 
-PySide6-Oberfläche für die Bus-Analyse und Debug-Funktionen der Stiebel Eltron WPL-A (Elster-CAN). Sie spricht per MQTT mit der Firmware aus [ha-stiebel-control](https://github.com/bullitt186/ha-stiebel-control) (Upstream bullitt186, Topic-Wurzel `heatingpump/`, siehe PR #138 und PR #141).
+PySide6 GUI for bus analysis and debug functions of the Stiebel Eltron WPL-A (Elster CAN). It talks over MQTT to the firmware from [ha-stiebel-control](https://github.com/bullitt186/ha-stiebel-control) (upstream bullitt186, topic root `heatingpump/`, see PR #138 and PR #141).
 
-## 1. Zweck
+## 1. Purpose
 
-- CAN-Bus mitlesen (Rohframes, dekodiert anhand der Elster-Referenz)
-- Einzelne Elster-Signale gezielt abfragen
-- Index-Bereiche eines CAN-Members scannen
-- Teilnehmer auf dem Bus suchen
-- Schreiben mit Rücklesen (nur nach Freischalten und Bestätigung)
-- Mitschnitte als CSV oder JSONL exportieren und offline wieder laden
+- Monitor the CAN bus (raw frames, decoded using the Elster reference)
+- Query individual Elster signals on demand
+- Scan index ranges of a CAN member
+- Search for participants on the bus
+- Write with read-back (only after unlocking and confirmation)
+- Export recordings as CSV or JSONL and reload them offline
 
-## 2. Voraussetzungen
+## 2. Requirements
 
-- Python 3 (Windows, Git-Bash oder PowerShell)
-- Virtuelle Umgebung im Repo-Ordner:
+- Python 3 (Windows, Git Bash or PowerShell)
+- Virtual environment in the repo folder:
 
   ```
   python -m venv .venv
@@ -23,40 +25,40 @@ PySide6-Oberfläche für die Bus-Analyse und Debug-Funktionen der Stiebel Eltron
   pip install pytest
   ```
 
-- Abhängigkeiten laut `gui/requirements.txt`: PySide6, paho-mqtt (1.6.x-API)
-- Referenztabelle `ElsterTable.json` (siehe Abschnitt 4)
+- Dependencies per `gui/requirements.txt`: PySide6, paho-mqtt (1.6.x API)
+- Reference table `ElsterTable.json` (see section 4)
 
 ## 3. Start
 
-Aus dem Repo-Wurzelordner:
+From the repo root folder:
 
 ```
 python -I gui/elster_gui.py
 ```
 
-`-I` ist Pflicht, damit Module aus fremden Ordnern nicht geladen werden.
+`-I` is mandatory so that modules from foreign folders are not loaded.
 
-## 4. Zugangsdaten und Referenz
+## 4. Credentials and reference
 
-Die MQTT-Zugangsdaten stehen in `secrets.yaml` im Repo-Wurzelordner (nicht im Repo, nie committen). Alternativ Pfad über die Umgebungsvariable `STIEBEL_SECRETS`. Benötigte Schlüssel:
+The MQTT credentials are stored in `secrets.yaml` in the repo root folder (not in the repo, never commit). Alternatively, the path can be set via the environment variable `STIEBEL_SECRETS`. Required keys:
 
 - `mqtt_server`
 - `mqtt_port`
 - `mqtt_username`
 - `mqtt_password`
 
-Der Verbindungsdialog ist mit diesen Werten vorbelegt. Das Passwort wird nicht gespeichert und nicht geloggt.
+The connection dialog is pre-filled with these values. The password is neither stored nor logged.
 
-Die Referenztabelle `ElsterTable.json` wird aus der Umgebungsvariable `ELSTER_REFERENCE_JSON` gelesen. Ohne diese Variable sucht die GUI unter `../elster_reference/ElsterTable.json` relativ zum Repo.
+The reference table `ElsterTable.json` is read from the environment variable `ELSTER_REFERENCE_JSON`. Without this variable, the GUI looks under `../elster_reference/ElsterTable.json` relative to the repo.
 
-## 5. Funktionen (Tabs)
+## 5. Functions (tabs)
 
-- **Live** (`tab_live.py`): zeigt CAN-Frames vom ESP in Echtzeit mit Elster-Dekodierung, filterbar nach CAN-ID und Art.
-- **Abfrage** (`tab_query.py`): liest oder schreibt ein Elster-Signal per MQTT und zeigt den Verlauf der Ergebnisse.
-- **Scanner** (`tab_scanner.py`): fragt einen Index-Bereich eines CAN-Members ab und zeigt die Trefferliste mit Namen aus der Referenz.
-- **Status** (`tab_status.py`): zeigt Verfügbarkeit, MQTT-Verbindung und den Status der Firmware (Zähler, Ringpuffer, TWAI-Fehler).
-- **Analyse** (`tab_analyse.py`): vergleicht einen Index über mehrere Members und hilft bei der Typwahl.
-- **Index-Browser** (`tab_index_browser.py`): zeigt alle Indizes einer Messung mit Abgleich gegen die Referenz.
+- **Live** (`tab_live.py`): shows CAN frames from the ESP in real time with Elster decoding, filterable by CAN ID and type.
+- **Query** (`tab_query.py`): reads or writes an Elster signal via MQTT and shows the history of results.
+- **Scanner** (`tab_scanner.py`): queries an index range of a CAN member and shows the hit list with names from the reference.
+- **Status** (`tab_status.py`): shows availability, MQTT connection and the firmware status (counters, ring buffer, TWAI errors).
+- **Analysis** (`tab_analyse.py`): compares one index across several members and helps choose the type.
+- **Index browser** (`tab_index_browser.py`): shows all indices of a measurement with a comparison against the reference.
 
 ## 6. Tests
 
@@ -64,12 +66,12 @@ Die Referenztabelle `ElsterTable.json` wird aus der Umgebungsvariable `ELSTER_RE
 python -I -m pytest tests
 ```
 
-Die Tests laufen ohne Broker; der MQTT-Transport wird durch Fakes ersetzt.
+The tests run without a broker; the MQTT transport is replaced by fakes.
 
-## 7. Hinweis zum Debug-Modus
+## 7. Note on debug mode
 
-Der Debug-Firmware-Modus (Topic-Präfix `stiebel-debug/`) ist eine Altlast. Ziel ist die Upstream-API (`heatingpump/…`, Schnittstelle siehe [docs/INTERFACES.md](docs/INTERFACES.md), Abschnitt 13).
+The debug firmware mode (topic prefix `stiebel-debug/`) is legacy. The goal is the upstream API (`heatingpump/…`, interface described in [docs/INTERFACES.md](docs/INTERFACES.md), section 13).
 
-## 8. Lizenz
+## 8. License
 
-GPL-3.0, siehe [LICENSE](LICENSE).
+GPL-3.0, see [LICENSE](LICENSE).

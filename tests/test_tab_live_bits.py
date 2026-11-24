@@ -17,11 +17,11 @@ from elster import ElsterDb, default_reference_path  # noqa: E402
 
 DB_JSON = str(default_reference_path())
 
-# Langformat Index 0x0176, Switch 0xFA (kein Switch-Label), Wert 0x0041
+# Long format index 0x0176, switch 0xFA (no switch label), value 0x0041
 BIT_FA = {"t": 1000, "id": 0x180, "data": bytes([0xD2, 0x00, 0xFA, 0x01, 0x76, 0x00, 0x41]), "tx": False}
-# Gleicher Index, Switch 0xF8 (Minimum) -> Zahl statt Bitfeld
+# Same index, switch 0xF8 (minimum) -> number instead of bit field
 BIT_F8 = {"t": 1010, "id": 0x180, "data": bytes([0xD2, 0x00, 0xF8, 0x01, 0x76, 0x00, 0x41]), "tx": False}
-# Normaler Wert Index 0x0003, Switch 0xFA, Wert 0x0208 -> 52.0
+# Normal value index 0x0003, switch 0xFA, value 0x0208 -> 52.0
 NORMAL = {"t": 1020, "id": 0x180, "data": bytes([0xD2, 0x00, 0xFA, 0x00, 0x03, 0x02, 0x08]), "tx": False}
 
 
@@ -42,7 +42,7 @@ def _model(db, rows):
 
 
 def _wert(model, row):
-    return model.data(model.index(row, tab_live.COLUMNS.index("Wert")))
+    return model.data(model.index(row, tab_live.COLUMNS.index("Value")))
 
 
 def test_bitfeld_bei_aktuellem_wert(app, db):

@@ -1,4 +1,4 @@
-"""Tests fuer gui/elster.py (ohne Qt, ohne paho)."""
+"""Tests for gui/elster.py (no Qt, no paho)."""
 import sys
 from pathlib import Path
 
@@ -35,7 +35,7 @@ def test_read_request_speicher_short_index(db):
 
 
 def test_read_request_raumfernfuehler_generic_formula(db):
-    # Generische Formel (7.1) gilt fuer jede ID, auch wenn read_id 00 00 ist
+    # Generic formula (7.1) applies to every ID, even if read_id is 00 00
     can_id, data = build_read_request(0x400, 0x0003, db)
     assert can_id == 0x680
     assert data == bytes.fromhex("81 00 03 00 00 00 00")

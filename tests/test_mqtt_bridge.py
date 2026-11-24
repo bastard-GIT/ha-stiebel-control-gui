@@ -1,10 +1,9 @@
-"""Tests fuer gui/mqtt_client.py (Switch, Format, Verfuegbarkeit) und die Tabs Abfrage/Scanner.
+"""Tests for gui/mqtt_client.py (switch, format, availability) and the Query/Scanner tabs.
 
-Kein Broker: die Bridge wird ueber _on_message (paho-Callback) gefuettert, gesendet wird an
-einen Fake-Client. Die Tabs bekommen eine Fake-Bridge mit denselben Signalen.
-Qt laeuft offscreen.
+No broker: the bridge is fed via _on_message (paho callback), sending goes to a fake client.
+The tabs get a fake bridge with the same signals. Qt runs offscreen.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_mqtt_bridge.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_mqtt_bridge.py -q
 """
 
 import json
@@ -99,7 +98,7 @@ def db():
     return ElsterDb()
 
 
-# ---------------------------------------------------------------- Senden
+# ---------------------------------------------------------------- Sending
 
 def test_send_read_default_has_no_extra_fields(bridge_and_client):
     bridge, client = bridge_and_client
@@ -153,7 +152,7 @@ def test_send_rejects_invalid_values(bridge_and_client, kwargs):
     assert client.published == []
 
 
-# ---------------------------------------------------------------- Empfang
+# ---------------------------------------------------------------- Receiving
 
 def test_read_result_without_switch_defaults_to_fa(bridge_and_client):
     bridge, _ = bridge_and_client
@@ -191,7 +190,7 @@ def test_scan_progress_and_result_switch(bridge_and_client):
     }))
     assert progress[0]["switch"] == 0xF9
     items = results[0]["items"]
-    assert [i["switch"] for i in items] == [0xF8, 0xFA]  # fehlt -> Top-Level, sonst eigener Wert
+    assert [i["switch"] for i in items] == [0xF8, 0xFA]  # missing -> top level, otherwise own value
     assert items[0]["index"] == 0x0003 and items[0]["raw"] == 0x0100
 
 
@@ -213,11 +212,11 @@ def test_broken_message_is_ignored(bridge_and_client):
     bridge._on_message(None, None, msg("stiebel-debug/read/result", b"\xff not json"))
     bridge._on_message(None, None, msg("stiebel-debug/read/result",
                                        {"member": "0x180", "index": "0x0003", "raw": "0x0100",
-                                        "switch": "0x123"}))  # ausserhalb 8 Bit
+                                        "switch": "0x123"}))  # outside 8 bit
     assert got == []
 
 
-# ---------------------------------------------------------------- Verfuegbarkeit
+# ---------------------------------------------------------------- Availability
 
 def _avail_listeners(bridge):
     events = []
@@ -245,7 +244,7 @@ def test_availability_offline_wins(bridge_and_client):
     events = _avail_listeners(bridge)
     bridge._on_message(None, None, msg("stiebel-debug/availability", "online"))
     bridge._on_message(None, None, msg("heatingpump/status", "offline"))
-    bridge._on_message(None, None, msg("stiebel-debug/availability", "online"))  # debug wieder online
+    bridge._on_message(None, None, msg("stiebel-debug/availability", "online"))  # debug online again
     assert events[-1] == ("avail", "offline")
     bridge._on_message(None, None, msg("heatingpump/status", "online"))
     assert events[-1] == ("avail", "online")
@@ -278,7 +277,7 @@ def test_connect_resets_availability_memory(bridge_and_client):
     assert bridge._combined_availability() is None
 
 
-# ---------------------------------------------------------------- Tab Abfrage
+# ---------------------------------------------------------------- Tab Query
 
 def test_query_tab_sends_format_and_switch(qapp, db):
     fake = FakeBridge()
@@ -317,16 +316,16 @@ def test_query_tab_history_switch_column_and_no_mixing(qapp, db):
     tab._on_query()
     info_before = tab._info_label.text()
 
-    # Antwort mit anderem Switch: Verlauf ja, "Letztes Ergebnis" nein.
+    # Reply with other switch: history yes, last result no.
     fake.read_result.emit({"member": member, "index": 0x0003, "raw": 0x0500, "status": "ok", "switch": 0xF8})
     assert tab._info_label.text() == info_before
     assert tab._table.rowCount() == 1
     col = tab_query.HEADERS.index("Switch")
     assert tab._table.item(0, col).text() == "min"
 
-    # Passende Antwort (aktueller Wert, ohne Feld -> 0xFA): Ergebnis wird gefuellt, Switch leer.
+    # Matching reply (current value, no field -> 0xFA): result is filled, switch empty.
     fake.read_result.emit({"member": member, "index": 0x0003, "raw": 0x0100, "status": "ok"})
-    assert "Roh: 0x0100" in tab._info_label.text()
+    assert "Raw: 0x0100" in tab._info_label.text()
     assert tab._table.rowCount() == 2
     assert tab._table.item(0, col).text() == ""
     assert tab._table.item(1, col).text() == "min"
@@ -378,7 +377,7 @@ def test_scanner_results_keyed_by_index_and_switch(qapp, db):
         ],
     })
     assert tab._table.rowCount() == 2
-    # gleiche (index, switch) ersetzt den Treffer statt eine Zeile anzuhaengen
+    # same (index, switch) replaces the hit instead of appending a row
     fake.scan_result.emit({
         "member": 0x180, "format": "long", "switch": 0xF8,
         "items": [{"index": 0x0003, "raw": 0x0300, "status": "ok", "switch": 0xF8}],
@@ -386,7 +385,7 @@ def test_scanner_results_keyed_by_index_and_switch(qapp, db):
     assert tab._table.rowCount() == 2
     assert len(tab._items) == 2
     sw_col = tab_scanner.COLUMNS.index("Switch")
-    raw_col = tab_scanner.COLUMNS.index("Rohwert")
+    raw_col = tab_scanner.COLUMNS.index("Raw value")
     rows = {tab._table.item(r, sw_col).text(): tab._table.item(r, raw_col).text()
             for r in range(tab._table.rowCount())}
     assert rows == {"min": "0x0300", "": "0x0200"}
@@ -409,13 +408,13 @@ def test_scanner_export_items_have_switch_and_format(qapp, db, monkeypatch):
     assert saved[0][0]["format"] == "short"
 
 
-# ---------------------------------------------------------------- Status / Quelle
+# ---------------------------------------------------------------- Status / source
 
 def test_status_tab_shows_source(qapp):
     fake = FakeBridge()
     tab = tab_status.StatusTab(fake)
     fake.availability_source.emit("produktiv")
-    assert tab._lbl_source.text() == "Produktiv"
+    assert tab._lbl_source.text() == "Production"
     fake.availability_source.emit("debug")
     assert tab._lbl_source.text() == "Debug"
 
@@ -425,7 +424,7 @@ def test_source_label_unknown():
     assert tab_status.source_label("sonst") == "-"
 
 
-# ---------------------------------------------------------------- Firmware-Art
+# ---------------------------------------------------------------- Firmware kind
 
 def _fw_listeners(bridge):
     kinds = []
@@ -477,8 +476,8 @@ def test_debug_ignores_produktiv_offline(bridge_and_client):
     events = _avail_listeners(bridge)
     bridge._on_message(None, None, msg("stiebel-debug/status", {"fw": "debug"}))
     bridge._on_message(None, None, msg("stiebel-debug/availability", "online"))
-    bridge._on_message(None, None, msg("heatingpump/status", "offline"))  # retained LWT der Produktiv-FW
-    assert events == [("source", "debug"), ("avail", "online")]  # produktiv-Meldung ohne Emission
+    bridge._on_message(None, None, msg("heatingpump/status", "offline"))  # retained LWT of the production FW
+    assert events == [("source", "debug"), ("avail", "online")]  # production message without emission
     assert bridge._combined_availability() == "online"
 
 
@@ -503,7 +502,7 @@ def test_prod_still_uses_offline_wins(bridge_and_client):
 def test_firmware_switch_recomputes_availability(bridge_and_client):
     bridge, _ = bridge_and_client
     events = _avail_listeners(bridge)
-    bridge._on_message(None, None, msg("heatingpump/status", "offline"))  # unknown: Produktiv-LWT
+    bridge._on_message(None, None, msg("heatingpump/status", "offline"))  # unknown: production LWT
     assert events[-1] == ("avail", "offline")
     bridge._on_message(None, None, msg("stiebel-debug/availability", "online"))
     bridge._on_message(None, None, msg("stiebel-debug/status", {"fw": "debug"}))
@@ -558,10 +557,10 @@ def test_connect_resets_firmware_to_unknown(bridge_and_client, monkeypatch):
     assert bridge._fw == "unknown"
 
 
-# ---------------------------------------------------------------- Produktiv-Sniffer (can_debug)
+# ---------------------------------------------------------------- Production sniffer (can_debug)
 
 class RawClient(FakeClient):
-    """Wie FakeClient, speichert aber den Rohtext (Schalter-Payload "on"/"off" ist kein JSON)."""
+    """Like FakeClient, but stores the raw text (switch payload "on"/"off" is not JSON)."""
 
     def publish(self, topic, payload, qos=0):
         self.published.append((topic, payload))
@@ -599,7 +598,7 @@ def test_prod_frames_without_u_get_pc_time(bridge_and_client):
     assert len(frames) == 1
     assert frames[0]["id"] == 0x180
     assert frames[0]["ts_src"] == "pc"
-    assert frames[0]["ts"] == pytest.approx(100.0)  # Ankunft 100 s, t = 1 s nach Boot
+    assert frames[0]["ts"] == pytest.approx(100.0)  # arrival 100 s, t = 1 s after boot
 
 
 def test_prod_frames_with_u_use_esp_time(bridge_and_client):
@@ -671,7 +670,7 @@ def test_send_sniff_unknown_firmware_sends_to_both(bridge_and_client):
 def test_status_tab_tolerates_prod_status(qapp):
     fake = FakeBridge()
     tab = tab_status.StatusTab(fake)
-    # Produktiv-Status: nur fw, rx, heap, ntp; TWAI-Felder nur bei TWAI
+    # Production status: only fw, rx, heap, ntp; TWAI fields only with TWAI
     fake.status.emit({"fw": "prod", "rx": 42, "heap": 123456, "ntp": True})
     assert tab._lbl_rx.text() == "42"
     assert tab._lbl_heap.text() == "123456"
@@ -707,4 +706,4 @@ def test_status_tab_counts_fps_and_bus_off(qapp, monkeypatch):
                       "twai_err": 0, "bus_off": True, "heap": 7})
     assert tab._lbl_fps.text() == "10.0"
     assert tab._lbl_rx_fill.text() == "5 / 10"
-    assert tab._lbl_bus_off.text() == "JA"
+    assert tab._lbl_bus_off.text() == "YES"

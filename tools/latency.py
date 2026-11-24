@@ -1,4 +1,4 @@
-"""Antwortzeit je CAN-Member aus auto_*_rx.jsonl (TX-Request -> erste passende Antwort des Members)."""
+"""Response time per CAN member from auto_*_rx.jsonl (TX request -> first matching response of the member)."""
 import glob
 import json
 import os
@@ -14,20 +14,20 @@ def _key(d):
 
 
 def _times(r):
-    """-> (t_ms, u_ms oder None). u nur wenn > 0 (alte Logs haben kein u)."""
+    """-> (t_ms, u_ms or None). u only if > 0 (old logs have no u)."""
     u = int(r.get("u") or 0)
     return int(r["t"]), (u if u > 0 else None)
 
 
 def _dt(a, b):
-    """Differenz in ms von a nach b. u nur, wenn beide ein u haben; sonst beide mit t."""
+    """Difference in ms from a to b. u only if both have a u; otherwise both use t."""
     if a[1] is not None and b[1] is not None:
         return b[1] - a[1]
     return b[0] - a[0]
 
 
 def latencies(files=None):
-    """-> {member: sortierte Liste ms}. Unbeantwortete Requests zaehlen separat in sent."""
+    """-> {member: sorted list of ms}. Unanswered requests are counted separately in sent."""
     files = files or sorted(glob.glob(os.path.join(LOGS, "auto_*_rx.jsonl")))
     lat = defaultdict(list)
     sent = defaultdict(int)

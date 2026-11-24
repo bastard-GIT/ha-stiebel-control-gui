@@ -1,10 +1,10 @@
-"""Tests Tab Abfrage mit Produktiv-Firmware (fw "prod", raw/read und raw/write).
+"""Tests for the Query tab with production firmware (fw "prod", raw/read and raw/write).
 
-Prod-Freigabe: Lesen und Schreiben aktiv; Absender, Timeout und Format sind deaktiviert
-(mit Tooltip) und stehen auf Standardwerten. Fake-Bridge mit denselben Signalen und
-Sendemethoden wie MqttBridge (keine MQTT-Verbindung); Qt laeuft offscreen.
+Production release: read and write active; sender, timeout and format are disabled
+(with tooltip) and set to default values. Fake bridge with the same signals and
+send methods as MqttBridge (no MQTT connection); Qt runs offscreen.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_tab_query_prod.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_tab_query_prod.py -q
 """
 
 import os
@@ -25,11 +25,11 @@ import tab_query  # noqa: E402
 from elster import ElsterDb  # noqa: E402
 
 SPEICHER = 0x201
-INDEX = 0x0013  # WW_KOMFORT_TEMPERATUR, Typ et_dec_val
+INDEX = 0x0013  # WW_KOMFORT_TEMPERATUR, type et_dec_val
 FA, F8, F9 = 0xFA, 0xF8, 0xF9
 DEFAULT_SRC_TEXT = "PC (0x680)"
-PROD_OFF_PART = "Im Produktiv-Modus nicht verfuegbar"
-WARN_REJECTED = "Schreiben abgelehnt (Status rejected)"
+PROD_OFF_PART = "Not available in production mode"
+WARN_REJECTED = "Write rejected (status rejected)"
 
 
 class ProdFake(QObject):
@@ -64,7 +64,7 @@ def db():
 
 @pytest.fixture
 def fake_elster(monkeypatch):
-    """Einfache Fakes wie in test_tab_query_write.py: Wert * 10 -> Rohwert."""
+    """Simple fakes as in test_tab_query_write.py: value * 10 -> raw value."""
     monkeypatch.setattr(tab_query, "encode_value", lambda t, s: int(round(float(s) * 10)))
     monkeypatch.setattr(tab_query, "is_writable", lambda t: True)
     monkeypatch.setattr(tab_query, "build_write_request",
@@ -105,12 +105,12 @@ def _cell(tab, row, header):
     return tab._table.item(row, tab_query.HEADERS.index(header)).text()
 
 
-# ---------------------------------------------------------------- Lock und Bedienelemente
+# ---------------------------------------------------------------- Lock and controls
 
 def test_prod_enables_all_query_widgets(qapp, db):
     fake = ProdFake()
     tab = _tab(db, fake, fw="prod")
-    # Absender, Timeout, Format sind im Prod-Modus gesperrt (eigene Tests), alle anderen offen
+    # Sender, timeout, format are locked in prod mode (own tests), all others open
     assert all(w.isEnabled() for w in tab._lockable if w not in tab._prod_off)
     assert tab._fw_label.isHidden()
     assert tab._fw_label.text() == ""
@@ -121,7 +121,7 @@ def test_unknown_keeps_query_widgets_locked_with_hint(qapp, db):
     tab = _tab(db, fake, fw=None)
     assert not any(w.isEnabled() for w in tab._lockable)
     assert not tab._fw_label.isHidden()
-    assert tab._fw_label.text() == "Warte auf Status der Firmware..."
+    assert tab._fw_label.text() == "Waiting for firmware status..."
 
 
 def test_prod_disables_src_timeout_format_with_tooltip(qapp, db):
@@ -130,9 +130,9 @@ def test_prod_disables_src_timeout_format_with_tooltip(qapp, db):
     for widget in (tab._src_combo, tab._timeout_spin, tab._format_combo):
         assert not widget.isEnabled()
         assert PROD_OFF_PART in widget.toolTip()
-    assert "Absender" in tab._src_combo.toolTip()
-    assert "Timeout" in tab._timeout_spin.toolTip()
-    assert "Format" in tab._format_combo.toolTip()
+    assert "sender" in tab._src_combo.toolTip()
+    assert "timeout" in tab._timeout_spin.toolTip()
+    assert "format" in tab._format_combo.toolTip()
 
 
 def test_prod_keeps_member_index_switch_query_button_enabled(qapp, db):
@@ -172,14 +172,14 @@ def test_prod_resets_src_format_timeout_to_defaults(qapp, db):
     assert tab._format_combo.currentData() == "auto"
 
 
-# ---------------------------------------------------------------- Lesen
+# ---------------------------------------------------------------- Read
 
 def test_prod_read_sends_send_read_with_defaults(qapp, db):
     fake = ProdFake()
     tab = _tab(db, fake, fw="prod")
     _set_read(tab, switch=FA)
     tab._on_query()
-    assert fake.reads == [(0x100, 0x4F4D, "auto", FA, {})]  # keine Zusatzfelder src/timeout_ms
+    assert fake.reads == [(0x100, 0x4F4D, "auto", FA, {})]  # no extra fields src/timeout_ms
 
 
 def test_prod_read_min_switch_sends_f8(qapp, db):
@@ -198,7 +198,7 @@ def test_prod_read_result_ok_shows_value(qapp, db):
     fake.read_result.emit({"member": 0x100, "index": 0x4F4D, "switch": FA, "raw": 0x01F6,
                            "status": "ok", "src": 0x680})
     assert "Status: ok" in tab._info_label.text()
-    assert "Roh: 0x01f6" in tab._info_label.text()
+    assert "Raw: 0x01f6" in tab._info_label.text()
     assert _cell(tab, 0, "Status") == "ok"
 
 
@@ -210,7 +210,7 @@ def test_prod_read_result_timeout_shows_no_value(qapp, db):
     fake.read_result.emit({"member": 0x100, "index": 0x4F4D, "switch": FA, "raw": 0,
                            "status": "timeout", "src": 0x680})
     assert _cell(tab, 0, "Status") == "Timeout"
-    assert _cell(tab, 0, "Wert") == "–"
+    assert _cell(tab, 0, "Value") == "–"
 
 
 def test_read_result_busy_shows_scan_hint_without_value(qapp, db):
@@ -220,14 +220,14 @@ def test_read_result_busy_shows_scan_hint_without_value(qapp, db):
     tab._on_query()
     fake.read_result.emit({"member": 0x100, "index": 0x4F4D, "switch": FA, "raw": 0,
                            "status": "busy", "src": 0x680})
-    assert "Status: Firmware beschäftigt (Scan läuft)" in tab._info_label.text()
-    assert _cell(tab, 0, "Status") == "Firmware beschäftigt (Scan läuft)"
-    assert _cell(tab, 0, "Roh dez") == "–"
-    assert _cell(tab, 0, "Wert") == "–"
+    assert "Status: Firmware busy (scan running)" in tab._info_label.text()
+    assert _cell(tab, 0, "Status") == "Firmware busy (scan running)"
+    assert _cell(tab, 0, "Raw dec") == "–"
+    assert _cell(tab, 0, "Value") == "–"
 
 
 def test_status_text_contains_busy_entry():
-    assert tab_query.STATUS_TEXT["busy"] == "Firmware beschäftigt (Scan läuft)"
+    assert tab_query.STATUS_TEXT["busy"] == "Firmware busy (scan running)"
     assert tab_query.STATUS_TEXT["ok"] == "ok"
     assert tab_query.STATUS_TEXT["timeout"] == "Timeout"
 
@@ -241,8 +241,8 @@ def test_prod_sequence_all_continues_after_busy(qapp, db, monkeypatch):
     assert [r[3] for r in fake.reads] == [FA]
     fake.read_result.emit({"member": 0x100, "index": 0x4F4D, "switch": FA, "raw": 0,
                            "status": "busy", "src": 0x680})
-    assert [r[3] for r in fake.reads] == [FA, F8]  # busy ist kein Abbruch
-    assert "aktuell: Firmware beschäftigt (Scan läuft)" in tab._info_label.text()
+    assert [r[3] for r in fake.reads] == [FA, F8]  # busy is not an abort
+    assert "current: Firmware busy (scan running)" in tab._info_label.text()
     fake.read_result.emit({"member": 0x100, "index": 0x4F4D, "switch": F8, "raw": 0x01F6,
                            "status": "ok", "src": 0x680})
     fake.read_result.emit({"member": 0x100, "index": 0x4F4D, "switch": F9, "raw": 0x01F7,
@@ -259,13 +259,13 @@ def test_firmware_unknown_during_prod_sequence_aborts(qapp, db, monkeypatch):
     _set_read(tab, switch=tab_query.SWITCH_ALL)
     tab._on_query()
     fake.firmware_kind.emit("unknown")
-    assert "abgebrochen" in tab._hint_label.text()
+    assert "aborted" in tab._hint_label.text()
     assert not tab._query_btn.isEnabled()
     fake.firmware_kind.emit("prod")
     assert tab._query_btn.isEnabled()
 
 
-# ---------------------------------------------------------------- Schreiben
+# ---------------------------------------------------------------- Write
 
 def test_prod_write_not_sent_without_arm(qapp, db, fake_elster):
     fake = ProdFake()
@@ -283,8 +283,8 @@ def test_prod_write_confirm_text_has_prod_line(qapp, db, fake_elster, monkeypatc
     tab = _write_tab(db, fake)
     tab._on_send()
     assert tab_query.PROD_CONFIRM_LINE in asked[0]
-    assert "Firmware: Produktiv (raw/write, Ergebnis kann 'rejected' sein)" in asked[0]
-    assert asked[0].count("Firmware: Produktiv") == 1
+    assert "Firmware: production (raw/write, result may be 'rejected')" in asked[0]
+    assert asked[0].count("Firmware: production") == 1
 
 
 def test_debug_write_confirm_text_has_no_prod_line(qapp, db, fake_elster, monkeypatch):
@@ -299,7 +299,7 @@ def test_debug_write_confirm_text_has_no_prod_line(qapp, db, fake_elster, monkey
     tab._value_edit.setText("52.0")
     tab._arm_check.setChecked(True)
     tab._on_send()
-    assert "Firmware: Produktiv" not in asked[0]
+    assert "Firmware: production" not in asked[0]
 
 
 def test_prod_write_rejected_by_confirm_no_send(qapp, db, fake_elster, monkeypatch):
@@ -308,7 +308,7 @@ def test_prod_write_rejected_by_confirm_no_send(qapp, db, fake_elster, monkeypat
     tab = _write_tab(db, fake)
     tab._on_send()
     assert fake.writes == []
-    assert tab._arm_check.isChecked()  # Abbruch im Dialog: Freischaltung bleibt
+    assert tab._arm_check.isChecked()  # cancel in dialog: enabling stays
 
 
 def test_prod_write_confirmed_sends_auto_format(qapp, db, fake_elster, monkeypatch):
@@ -317,7 +317,7 @@ def test_prod_write_confirmed_sends_auto_format(qapp, db, fake_elster, monkeypat
     tab = _write_tab(db, fake)
     tab._on_send()
     assert fake.writes == [(SPEICHER, INDEX, 0x0208, "auto")]
-    assert not tab._send_btn.isEnabled()  # offen bis write_result
+    assert not tab._send_btn.isEnabled()  # open until write_result
 
 
 def test_prod_write_rejected_shows_warning(qapp, db, fake_elster):
@@ -326,9 +326,9 @@ def test_prod_write_rejected_shows_warning(qapp, db, fake_elster):
     fake.write_result.emit(_write_result("rejected", readback=None, ack=None))
     assert WARN_REJECTED in tab._warn_label.text()
     assert "can_raw_write" in tab._warn_label.text()
-    assert "Sperrregel" in tab._warn_label.text()
+    assert "lock rule" in tab._warn_label.text()
     assert _cell(tab, 0, "Status") == "rejected"
-    assert not tab._arm_check.isChecked()  # nach Abschluss wieder gesperrt
+    assert not tab._arm_check.isChecked()  # locked again after completion
 
 
 def test_write_result_verified_clears_warning(qapp, db, fake_elster):
@@ -366,7 +366,7 @@ def test_firmware_change_disarms_prod_write(qapp, db, fake_elster):
     assert not tab._arm_check.isChecked()
     assert not tab._send_btn.isEnabled()
     fake.firmware_kind.emit("prod")
-    assert not tab._send_btn.isEnabled()  # wieder aus, bis erneut freigeschaltet
+    assert not tab._send_btn.isEnabled()  # off again until re-enabled
 
 
 def test_prod_write_format_control_locked_to_auto(qapp, db, fake_elster):

@@ -1,4 +1,4 @@
-"""Tests fuer Schreib-Funktionen in gui/elster.py (ohne Qt, ohne paho)."""
+"""Tests for write functions in gui/elster.py (no Qt, no paho)."""
 import sys
 from pathlib import Path
 
@@ -16,7 +16,7 @@ from elster import (  # noqa: E402
 )
 
 
-# --- Encode-Beispiele je Typ ---------------------------------------------
+# --- Encode examples per type ---------------------------------------------
 
 @pytest.mark.parametrize("text, raw", [
     ("-2", 0xFFFE),
@@ -32,8 +32,8 @@ def test_encode_default(text, raw):
     ("21.0", 0x00D2),
     ("21,0", 0x00D2),
     ("-2.5", 0xFFE7),
-    ("21.09", 0x00D2),      # abgeschnitten
-    ("-0.05", 0x0000),      # gegen Null abgeschnitten
+    ("21.09", 0x00D2),      # truncated
+    ("-0.05", 0x0000),      # truncated toward zero
 ])
 def test_encode_dec_val(text, raw):
     assert encode_value("et_dec_val", text) == raw
@@ -77,7 +77,7 @@ def test_encode_betriebsart_prefix_case_insensitive():
 
 
 def test_encode_betriebsart_notbetrieb_takes_last_entry():
-    # Notbetrieb steht doppelt (0x0000 und 0x0600); von hinten gewinnt 0x0600
+    # Notbetrieb appears twice (0x0000 and 0x0600); from the back, 0x0600 wins
     assert encode_value("et_betriebsart", "Notbetrieb") == 0x0600
 
 
@@ -119,12 +119,12 @@ def test_round_trip(type_name, text):
     assert decode_value(type_name, encode_value(type_name, text)) == text
 
 
-# --- Hex-Rohwert ---------------------------------------------------------
+# --- Hex raw value ---------------------------------------------------------
 
 def test_hex_raw_for_any_type():
     assert encode_value("et_default", "0x0300") == 0x0300
     assert encode_value("et_zeit", "0xFFFE") == 0xFFFE
-    assert encode_value("et_double_val", "0x04D2") == 0x04D2  # nicht schreibbar, Hex erlaubt
+    assert encode_value("et_double_val", "0x04D2") == 0x04D2  # not writable, hex allowed
 
 
 def test_hex_raw_8000_rejected():
@@ -142,7 +142,7 @@ def test_hex_invalid_rejected():
         encode_value("et_default", "0xZZ")
 
 
-# --- Fehlerfaelle --------------------------------------------------------
+# --- Error cases --------------------------------------------------------
 
 @pytest.mark.parametrize("type_name, text", [
     ("et_double_val", "1.0"),
@@ -150,11 +150,11 @@ def test_hex_invalid_rejected():
     ("et_dev_nr", "1"),
     ("et_err_nr", "Hochdruck"),
     ("et_dev_id", "2-01"),
-    ("et_default", "32768"),       # 0x8000 = kein Wert
-    ("et_default", "-32768"),      # ausserhalb -32767..
+    ("et_default", "32768"),       # 0x8000 = no value
+    ("et_default", "-32768"),      # outside -32767..
     ("et_default", "1.5"),
     ("et_default", "abc"),
-    ("et_dec_val", "3276.8"),      # *10 = 32768, ausserhalb +-32767
+    ("et_dec_val", "3276.8"),      # *10 = 32768, outside +-32767
     ("et_dec_val", "x"),
     ("et_cent_val", "400.00"),     # *100 = 40000
     ("et_mil_val", "32.768"),      # *1000 = 32768
@@ -171,8 +171,8 @@ def test_hex_invalid_rejected():
     ("et_datum", "32.01."),
     ("et_datum", "10.13."),
     ("et_datum", "00.05."),
-    ("et_time_domain", "16:00-07:00"),   # Start nach Ende
-    ("et_time_domain", "07:00-07:00"),   # Start gleich Ende
+    ("et_time_domain", "16:00-07:00"),   # start after end
+    ("et_time_domain", "07:00-07:00"),   # start equals end
     ("et_time_domain", "07:00"),
     ("et_unbekannt", "1"),
 ])
@@ -207,7 +207,7 @@ def test_write_short_frame():
 
 
 def test_write_short_forced_long_for_switch_index():
-    # 0xF7..0xFA sind immer Langformat, auch bei fmt "auto"/"short"
+    # 0xF7..0xFA are always long format, also with fmt "auto"/"short"
     _, data = build_write_request(0x180, 0x00F7, 0x0001, fmt="short")
     assert data == bytes.fromhex("3000fa00f70001")
 
@@ -230,11 +230,11 @@ def test_write_unknown_member_id_0x4ab():
 
 
 @pytest.mark.parametrize("member, index, value, fmt", [
-    (0x680, 0x0013, 0x0001, "auto"),   # eigene ID
+    (0x680, 0x0013, 0x0001, "auto"),   # own ID
     (0x800, 0x0013, 0x0001, "auto"),   # > 11 Bit
-    (0x180, 0x0013, 0x10000, "auto"),  # Wert > 16 Bit
+    (0x180, 0x0013, 0x10000, "auto"),  # value > 16 bit
     (0x180, 0x0013, -1, "auto"),
-    (0x180, 0x0013, 0x0001, "xyz"),    # unbekanntes Format
+    (0x180, 0x0013, 0x0001, "xyz"),    # unknown format
     (0x180, 0x0112, 0x0001, "short"),  # short mit Index > 0xFF
 ])
 def test_write_request_errors(member, index, value, fmt):

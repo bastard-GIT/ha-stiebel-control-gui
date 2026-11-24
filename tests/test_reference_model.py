@@ -1,8 +1,8 @@
-"""Tests fuer gui/reference_model.py (ohne Qt).
+"""Tests for gui/reference_model.py (no Qt).
 
-Das Original referenzen/elster_reference/ElsterTable.json wird nie beschrieben.
-Schreibtests arbeiten auf einer Kopie in tmp_path. Ein autouse-Fixture prueft
-den SHA256 des Originals vor und nach jedem Test.
+The original referenzen/elster_reference/ElsterTable.json is never written.
+Write tests work on a copy in tmp_path. An autouse fixture checks
+the SHA256 of the original before and after each test.
 """
 import copy
 import hashlib
@@ -29,7 +29,7 @@ def _sha(path) -> str:
 def original_unveraendert():
     before = _sha(DEFAULT_JSON)
     yield
-    assert _sha(DEFAULT_JSON) == before, "Original ElsterTable.json wurde veraendert"
+    assert _sha(DEFAULT_JSON) == before, "Original ElsterTable.json was modified"
 
 
 @pytest.fixture
@@ -49,15 +49,15 @@ def _free_index(model) -> int:
     for i in range(0x0FFF, 0x0000, -1):
         if i not in used:
             return i
-    raise AssertionError("kein freier Index")
+    raise AssertionError("no free index")
 
 
 # ---- Laden ----
 
 def test_standard_laedt_165_signale_164_echte_indices():
     m = ReferenceModel()
-    assert len(m.data["signals"]) == 165  # zusammengefuehrte Referenz (2026-11-08)
-    assert len(m.indices()) == 164  # Sentinel INDEX_NOT_FOUND nicht mitgezaehlt
+    assert len(m.data["signals"]) == 165  # merged reference (2026-11-08)
+    assert len(m.indices()) == 164  # sentinel INDEX_NOT_FOUND not counted
     assert m.dirty is False
     assert m.member_name(0x180) == "KESSEL"
 
@@ -116,7 +116,7 @@ def test_upsert_aendern_setzt_dirty_und_felder(model):
     sig = model.upsert_signal(idx, "GEAENDERT", model.types[1], 0x180, "neu")
 
     assert model.dirty is True
-    assert len(model.data["signals"]) == before  # kein neues Element
+    assert len(model.data["signals"]) == before  # no new element
     assert model.signal(idx) is sig
     assert sig["name"] == "GEAENDERT"
     assert sig["type"] == model.types[1]
@@ -124,7 +124,7 @@ def test_upsert_aendern_setzt_dirty_und_felder(model):
     assert sig["owner_name"] == "KESSEL"
     assert sig["comment"].startswith("neu | ")
     assert "GUI-Auswertung" in sig["comment"]
-    # index/index_int/poll werden beim Aendern nicht veraendert
+    # index/index_int/poll are not changed on update
     assert sig["index"] == old_index
     assert sig["index_int"] == idx
     assert sig["poll"] == old_poll
@@ -145,7 +145,7 @@ def test_upsert_gleicher_name_gleicher_index_ist_erlaubt(model):
     assert sig["name"] == name
 
 
-# ---- Fehler ----
+# ---- Errors ----
 
 def test_namenskollision_mit_anderem_index(model):
     idx = _free_index(model)
@@ -191,7 +191,7 @@ def test_save_as_schreibt_gueltiges_json_und_reload_zeigt_neuen_eintrag(model, t
     written = json.loads(target.read_text(encoding="utf-8"))  # gueltiges JSON
     assert written == model.data
 
-    # Rest der Signale identisch zum Original, nur der neue Eintrag kommt hinzu
+    # remaining signals identical to the original, only the new entry is added
     assert written["signals"][:-1] == original["signals"]
     assert written["signals"][-1]["index_int"] == idx
     assert written["types"] == original["types"]
@@ -211,5 +211,5 @@ def test_save_as_auf_geladene_datei_wirft_fehler(model, copy_path):
     with pytest.raises(ReferenceError):
         model.save_as(str(copy_path))
 
-    assert _sha(copy_path) == before  # Datei unveraendert
+    assert _sha(copy_path) == before  # file unchanged
     assert model.dirty is True

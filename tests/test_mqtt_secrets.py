@@ -1,4 +1,4 @@
-"""Tests fuer gui/mqtt_secrets.py (ohne Qt)."""
+"""Tests for gui/mqtt_secrets.py (without Qt)."""
 import sys
 from pathlib import Path
 

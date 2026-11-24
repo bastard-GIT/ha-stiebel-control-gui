@@ -1,7 +1,7 @@
-"""Tests fuer ReferenceModel.bits() / set_bits() (ohne Qt).
+"""Tests for ReferenceModel.bits() / set_bits() (no Qt).
 
-Schreibtests arbeiten auf einer Kopie in tmp_path. Das Original
-referenzen/elster_reference/ElsterTable.json wird nie beschrieben.
+Write tests work on a copy in tmp_path. The original
+referenzen/elster_reference/ElsterTable.json is never written.
 """
 import hashlib
 import shutil
@@ -26,7 +26,7 @@ def _sha(path) -> str:
 def original_unveraendert():
     before = _sha(DEFAULT_JSON)
     yield
-    assert _sha(DEFAULT_JSON) == before, "Original ElsterTable.json wurde veraendert"
+    assert _sha(DEFAULT_JSON) == before, "Original ElsterTable.json was modified"
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def _free_index(model) -> int:
     for i in range(0x0FFF, 0x0000, -1):
         if i not in used:
             return i
-    raise AssertionError("kein freier Index")
+    raise AssertionError("no free index")
 
 
 # ---- bits() ----

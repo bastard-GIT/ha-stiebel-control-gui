@@ -1,9 +1,9 @@
-"""Tests fuer den Scanner-Tab bei Produktiv-Firmware und die Teilnehmer-Suche (scan/members).
+"""Tests for the scanner tab with production firmware and the member search (scan/members).
 
-Fake-Bridge mit denselben Signalen und Sendemethoden wie MqttBridge; es gibt keine MQTT-Verbindung.
-Qt laeuft offscreen. Dateien fuer den CSV-Export landen in tmp_path.
+Fake bridge with the same signals and send methods as MqttBridge; there is no MQTT connection.
+Qt runs offscreen. Files for the CSV export go to tmp_path.
 
-Ausfuehren: QT_QPA_PLATFORM=offscreen python -I -m pytest tests/test_tab_scanner_prod.py -q
+Run: QT_QPA_PLATFORM=offscreen python -I -m pytest tests/test_tab_scanner_prod.py -q
 """
 
 import csv
@@ -25,8 +25,8 @@ import tab_scanner  # noqa: E402
 from elster import ElsterDb  # noqa: E402
 
 FA, F8, F9 = 0xFA, 0xF8, 0xF9
-PROD_TEXT_START = "Im Produktiv-Modus nicht verfuegbar"
-UNKNOWN_TEXT = "Warte auf Status der Firmware..."
+PROD_TEXT_START = "Not available in production mode"
+UNKNOWN_TEXT = "Waiting for firmware status..."
 
 
 class FakeBridge(QObject):
@@ -47,7 +47,7 @@ class FakeBridge(QObject):
         self.scans = []
         self.member_scans = []
         self.stops = 0
-        self.member_error = None  # Wenn gesetzt, wirft send_member_scan ValueError
+        self.member_error = None  # if set, send_member_scan raises ValueError
 
     def send_scan(self, member, from_idx, to_idx, delay_ms, fmt=None, switch=None):
         self.scans.append((member, from_idx, to_idx, delay_ms, fmt, switch))
@@ -87,7 +87,7 @@ def _tab(db, fake, fw="prod"):
 
 
 def _range_tab(db, fake, fw="prod", switch=FA):
-    """Tab mit kleinem Bereich 0x4e00..0x4e0f (16 Indizes)."""
+    """Tab with a small range 0x4e00..0x4e0f (16 indices)."""
     tab = _tab(db, fake, fw)
     tab._from.setText("0x4e00")
     tab._to.setText("0x4e0f")
@@ -105,7 +105,7 @@ def _member_progress(done, state="running", total=2048):
             "member": "members", "hits": 0, "seconds": 1}
 
 
-# ---------------------------------------------------------------- Sperre und Format/Pause
+# ---------------------------------------------------------------- Lock and format/pause
 
 def test_lock_unknown_closes_everything(qapp, db):
     fake = FakeBridge()
@@ -146,13 +146,13 @@ def test_lock_prod_keeps_start_and_inputs_open(qapp, db):
     for widget in (tab._member, tab._member_hex, tab._from, tab._to, tab._switch, tab._start_btn):
         assert widget.isEnabled()
     assert tab._fw_label.isHidden()
-    assert "Debug-Firmware" not in tab._fw_label.text()
+    assert "Debug firmware" not in tab._fw_label.text()
 
 
 def test_prod_text_has_no_debug_hint_anywhere(qapp, db):
     fake = FakeBridge()
     tab = _tab(db, fake, "prod")
-    assert "Nur mit Debug-Firmware" not in tab_scanner.FW_LOCK_TEXT.values()
+    assert "Only with debug firmware" not in tab_scanner.FW_LOCK_TEXT.values()
     assert tab._fw_label.text() == ""
 
 
@@ -178,7 +178,7 @@ def test_member_start_only_open_in_prod(qapp, db):
     fake = FakeBridge()
     tab = _tab(db, fake, "debug")
     assert not tab._mem_start_btn.isEnabled()
-    assert tab._mem_start_btn.toolTip() == "Nur mit Produktiv-Firmware (scan/members)"
+    assert tab._mem_start_btn.toolTip() == "Only with production firmware (scan/members)"
     fake.firmware_kind.emit("prod")
     assert tab._mem_start_btn.isEnabled()
     assert tab._mem_start_btn.toolTip() == ""
@@ -191,7 +191,7 @@ def test_lock_during_range_scan_blocks_member_search(qapp, db):
     assert not tab._start_btn.isEnabled()
     assert not tab._member_hex.isEnabled()
     assert not tab._mem_start_btn.isEnabled()
-    assert tab._stop_btn.isEnabled()  # Stopp bleibt bedienbar
+    assert tab._stop_btn.isEnabled()  # Stop stays usable
 
 
 def test_lock_during_member_scan_blocks_range_start(qapp, db):
@@ -209,25 +209,25 @@ def test_lock_during_member_scan_blocks_range_start(qapp, db):
 def test_estimate_prod_uses_fixed_150_ms(qapp, db):
     fake = FakeBridge()
     tab = _range_tab(db, fake, fw="prod")
-    tab._delay.setValue(400)  # in Produktiv wirkungslos
-    assert "16 Indizes x 150 ms = ca. 2.4 s" in tab._estimate.text()
+    tab._delay.setValue(400)  # no effect in production
+    assert "16 indices x 150 ms = approx. 2.4 s" in tab._estimate.text()
 
 
 def test_estimate_debug_uses_delay(qapp, db):
     fake = FakeBridge()
     tab = _range_tab(db, fake, fw="debug")
     tab._delay.setValue(200)
-    assert "16 Indizes x 200 ms = ca. 3.2 s" in tab._estimate.text()
+    assert "16 indices x 200 ms = approx. 3.2 s" in tab._estimate.text()
 
 
-# ---------------------------------------------------------------- Hex-ID
+# ---------------------------------------------------------------- Hex ID
 
 def test_parse_member_id_accepts_valid_and_rejects_invalid():
     assert tab_scanner.parse_member_id("0x7ff") == 0x7FF
     assert tab_scanner.parse_member_id("0x000") == 0
     assert tab_scanner.parse_member_id("0x180") == 0x180
-    assert tab_scanner.parse_member_id("0x680") is None  # PC-ID
-    assert tab_scanner.parse_member_id("0x800") is None  # ueber 0x7FF
+    assert tab_scanner.parse_member_id("0x680") is None  # PC ID
+    assert tab_scanner.parse_member_id("0x800") is None  # above 0x7FF
     assert tab_scanner.parse_member_id("xyz") is None
     assert tab_scanner.parse_member_id("") is None
 
@@ -275,7 +275,7 @@ def test_hex_id_in_debug_sends_member_as_before(qapp, db):
     assert fake.scans[0][0] == 0x180
 
 
-# ---------------------------------------------------------------- Bereichs-Scan in Prod
+# ---------------------------------------------------------------- Range scan in production
 
 def test_prod_send_scan_arguments(qapp, db):
     fake = FakeBridge()
@@ -316,7 +316,7 @@ def test_progress_ignores_members_mode(qapp, db):
     fake.scan_progress.emit(_member_progress(500))
     assert tab._progress.value() == 0
     assert tab._progress.maximum() == 16
-    assert not tab._start_btn.isEnabled()  # Bereichs-Scan laeuft noch
+    assert not tab._start_btn.isEnabled()  # range scan still running
     fake.scan_progress.emit(_member_progress(2048, state="done"))
     assert tab._progress.value() == 0
     assert not tab._start_btn.isEnabled()
@@ -345,7 +345,7 @@ def test_scan_result_items_without_format_are_shown(qapp, db):
     assert tab._table.item(0, 3).text() == "0x0208"
     assert tab._table.item(0, 4).text() == "ok"
     key = (0x0013, FA)
-    assert tab._items[key]["format"] == "auto"  # Fallback auf Scan-Format
+    assert tab._items[key]["format"] == "auto"  # fallback to scan format
 
 
 def test_scan_result_items_keep_int_raw_and_switch(qapp, db):
@@ -383,7 +383,7 @@ def test_scan_csv_export_with_prod_items(qapp, db, tmp_path, monkeypatch):
     assert rows[1][4] == "ok"
 
 
-# ---------------------------------------------------------------- Teilnehmer-Suche
+# ---------------------------------------------------------------- Member search
 
 def test_member_start_sends_default_range(qapp, db):
     fake = FakeBridge()
@@ -477,7 +477,7 @@ def test_member_result_not_supported_is_marked(qapp, db):
     tab = _tab(db, fake)
     tab._mem_start_btn.click()
     fake.member_result.emit({"id": 0x180, "index": 0x000B, "raw": 0x8000})
-    assert tab._mem_table.item(0, 1).text() == "KESSEL (nicht unterstuetzt)"
+    assert tab._mem_table.item(0, 1).text() == "KESSEL (not supported)"
     assert tab._mem_table.item(0, 3).text() == "0x8000"
 
 
@@ -485,7 +485,7 @@ def test_member_progress_updates_bar_and_estimate(qapp, db):
     fake = FakeBridge()
     tab = _tab(db, fake)
     assert "2048 IDs" in tab._mem_estimate.text()
-    assert "ca. 150 ms pro ID" in tab._mem_estimate.text()
+    assert "approx. 150 ms per ID" in tab._mem_estimate.text()
     tab._mem_start_btn.click()
     fake.scan_progress.emit(_member_progress(100))
     assert tab._mem_progress.maximum() == 2048
@@ -542,7 +542,7 @@ def test_member_double_click_sets_hex_id_field(qapp, db):
     fake.member_result.emit({"id": 0x514, "index": 0x000B, "raw": 7})
     tab._mem_table.itemDoubleClicked.emit(tab._mem_table.item(0, 0))
     assert tab._member_hex.text() == "0x514"
-    assert fake.scans == []  # Uebernahme startet nichts
+    assert fake.scans == []  # copying starts nothing
 
 
 def test_member_csv_export(qapp, db, tmp_path, monkeypatch):
@@ -551,7 +551,7 @@ def test_member_csv_export(qapp, db, tmp_path, monkeypatch):
     tab._mem_start_btn.click()
     fake.member_result.emit({"id": 0x180, "index": 0x000B, "raw": 5})
     fake.member_result.emit({"id": 0x514, "index": 0x000B, "raw": 0x8000})
-    path = tmp_path / "teilnehmer.csv"
+    path = tmp_path / "members.csv"
     monkeypatch.setattr(tab_scanner.QFileDialog, "getSaveFileName",
                         lambda *a, **k: (str(path), "CSV (*.csv)"))
     tab._mem_export_btn.click()
@@ -559,7 +559,7 @@ def test_member_csv_export(qapp, db, tmp_path, monkeypatch):
         rows = list(csv.reader(fh, delimiter=";"))
     assert rows[0] == ["id", "name", "index", "raw"]
     assert rows[1] == ["0x180", "KESSEL", "0x000b", "5"]
-    assert rows[2] == ["0x514", "WPUMPE (nicht unterstuetzt)", "0x000b", "32768"]
+    assert rows[2] == ["0x514", "WPUMPE (not supported)", "0x000b", "32768"]
 
 
 def test_member_export_without_results_informs(qapp, db, monkeypatch):
@@ -577,4 +577,4 @@ def test_member_scan_estimate_text_for_custom_range(qapp, db):
     tab._mem_from.setText("0x000")
     tab._mem_to.setText("0x00f")
     assert "16 IDs" in tab._mem_estimate.text()
-    assert "ca. 2 s" in tab._mem_estimate.text()
+    assert "approx. 2 s" in tab._mem_estimate.text()

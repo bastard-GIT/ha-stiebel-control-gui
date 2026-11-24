@@ -1,9 +1,9 @@
-"""Tests fuer gui/mqtt_client.py: send_write, write/result und Zeitstempel der rx-Frames.
+"""Tests for gui/mqtt_client.py: send_write, write/result and timestamps of the rx frames.
 
-Kein Broker: die Bridge wird ueber _on_message (paho-Callback) gefuettert, gesendet wird an
-einen Fake-Client. Die Ankunftszeit (time.time) ist ueber bridge._now ersetzbar.
+No broker: the bridge is fed via _on_message (paho callback), sent messages go to
+a fake client. The arrival time (time.time) can be replaced via bridge._now.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_mqtt_write_time.py -q
+Run:C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_mqtt_write_time.py -q
 """
 
 import json
@@ -138,7 +138,7 @@ def test_broken_write_result_is_ignored(bridge_and_client):
     assert got == []
 
 
-# ---------------------------------------------------------------- rx-Zeitstempel
+# ---------------------------------------------------------------- rx timestamps
 
 def _rx_item(t, **extra):
     item = {"t": t, "id": "0x180", "d": "0102", "tx": False}
@@ -150,7 +150,7 @@ def test_rx_with_u_is_esp_time(bridge_and_client):
     bridge, _ = bridge_and_client
     frames = []
     bridge.rx_frames.connect(frames.append)
-    bridge._now = lambda: 5000.0  # darf bei esp-Zeit keine Rolle spielen
+    bridge._now = lambda: 5000.0  # must have no effect with esp time
     bridge._on_message(None, None, msg("stiebel-debug/rx", [
         _rx_item(1234, u=1700000000123),
     ]))
@@ -169,7 +169,7 @@ def test_rx_without_u_is_pc_time(bridge_and_client):
     bridge._on_message(None, None, msg("stiebel-debug/rx", [_rx_item(500)]))
     f = frames[0][0]
     assert f["ts_src"] == "pc"
-    assert f["ts"] == pytest.approx(fake_now, abs=0.01)  # Ankunft 1.7e9 s, t=500 ms
+    assert f["ts"] == pytest.approx(fake_now, abs=0.01)  # arrival 1.7e9 s, t=500 ms
     assert isinstance(f["ts"], float)
 
 
@@ -183,7 +183,7 @@ def test_rx_mixed_batch(bridge_and_client):
     ]))
     by_src = {f["ts_src"]: f for f in frames[0]}
     assert by_src["esp"]["ts"] == 2000.5
-    assert by_src["pc"]["ts"] == pytest.approx(1000.0, abs=0.01)  # Ankunft 1000.0, t=500 ms
+    assert by_src["pc"]["ts"] == pytest.approx(1000.0, abs=0.01)  # arrival 1000.0, t=500 ms
 
 
 # ---------------------------------------------------------------- ClockSync
@@ -194,18 +194,18 @@ def test_clocksync_no_estimate_before_update():
 
 def test_clocksync_keeps_minimum_offset():
     cs = ClockSync()
-    cs.update(100.0, [1000])      # Offset 99.0
-    cs.update(105.0, [2000])      # Offset 103.0 (mehr Latenz) -> verworfen
+    cs.update(100.0, [1000])      # offset 99.0
+    cs.update(105.0, [2000])      # offset 103.0 (more latency) -> discarded
     assert cs.estimate(3000) == pytest.approx(3.0 + 99.0)
-    cs.update(100.5, [4000])      # Offset 96.5 -> neues Minimum
+    cs.update(100.5, [4000])      # offset 96.5 -> new minimum
     assert cs.estimate(5000) == pytest.approx(5.0 + 96.5)
 
 
 def test_clocksync_resets_on_smaller_t():
     cs = ClockSync()
-    cs.update(100.0, [5000])      # Offset 95.0
+    cs.update(100.0, [5000])      # offset 95.0
     assert cs.estimate(5000) == pytest.approx(100.0)
-    cs.update(101.0, [1000])      # t kleiner als 5000 -> ESP-Neustart, Reset
+    cs.update(101.0, [1000])      # t smaller than 5000 -> ESP restart, reset
     assert cs.estimate(2000) == pytest.approx(2.0 + 100.0)
 
 

@@ -17,14 +17,14 @@ from elster import ElsterDb, default_reference_path  # noqa: E402
 
 DB_JSON = str(default_reference_path())
 
-# Langlayout Switch 0xF8 (Minimum), Index 0x0003, Wert 0x0100; msg_type 2 (response)
+# Long layout switch 0xF8 (minimum), index 0x0003, value 0x0100; msg_type 2 (response)
 F8 = {"t": 1000, "id": 0x180, "data": bytes([0xD2, 0x00, 0xF8, 0x00, 0x03, 0x01, 0x00]), "tx": False}
-# Langlayout Switch 0xFA, gleicher Index wie F8
+# Long layout switch 0xFA, same index as F8
 FA = {"t": 1010, "id": 0x180, "data": bytes([0xD2, 0x00, 0xFA, 0x00, 0x03, 0x01, 0x00]), "tx": False}
-# Systemnachricht msg_type 6 und 7
+# System message msg_type 6 and 7
 SYS = {"t": 1020, "id": 0x180, "data": bytes([0x06, 0x01, 0xFE, 0x00, 0x00, 0x00, 0x00]), "tx": False}
 SYS_RESP = {"t": 1030, "id": 0x180, "data": bytes([0x07, 0x01, 0xFE, 0x00, 0x00, 0x00, 0x00]), "tx": False}
-# Kurzlayout: d2 = Index 0x01
+# Short layout: d2 = index 0x01
 SHORT = {"t": 1040, "id": 0x180, "data": bytes([0xD2, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00]), "tx": False}
 
 
@@ -64,14 +64,14 @@ def test_switch_column_values(app, db):
     assert _cell(model, 1, _col("Switch")) == ""
     assert _cell(model, 2, _col("Switch")) == ""
     assert _cell(model, 0, _col("Index")) == "0x0003"
-    assert _cell(model, 0, _col("Rohwert")) == "0x0100"
-    assert _cell(model, 0, _col("Wert")) == "25.6"   # Index 0x0003 ist et_dec_val in ElsterTable.json
+    assert _cell(model, 0, _col("Raw value")) == "0x0100"
+    assert _cell(model, 0, _col("Value")) == "25.6"   # index 0x0003 is et_dec_val in ElsterTable.json
 
 
 def test_system_frame_name_and_type(app, db):
     model = _model(db, [SYS, SYS_RESP])
-    assert _cell(model, 0, _col("Nachrichtenart")) == "system"
-    assert _cell(model, 1, _col("Nachrichtenart")) == "system-resp"
+    assert _cell(model, 0, _col("Message type")) == "system"
+    assert _cell(model, 1, _col("Message type")) == "system-resp"
     assert _cell(model, 0, _col("Name")) == "SYSTEM_0xFE"
     assert _cell(model, 0, _col("Switch")) == ""
 
@@ -86,7 +86,7 @@ def test_text_filter_matches_switch(app, db):
 
 
 def test_latest_key_includes_switch(app, db):
-    # Gleicher Sender und Index, aber verschiedener Switch: beide bleiben "letzter Wert".
+    # Same sender and index, but different switch: both stay "last value".
     model = _model(db, [F8, FA])
     proxy = tab_live._FilterProxy()
     proxy.setSourceModel(model)
@@ -113,7 +113,7 @@ def test_system_frames_not_in_latest(app, db):
     assert proxy.rowCount() == 0
 
 
-# ---------------------------------------------------------------- Produktiv-Sniffer (clientseitiger Filter)
+# ---------------------------------------------------------------- Production sniffer (client-side filter)
 
 from PySide6.QtCore import QObject, Signal  # noqa: E402
 
@@ -137,7 +137,7 @@ def test_frame_matches_id_and_type():
     assert tab_live._frame_matches(F8, [], None)
     assert tab_live._frame_matches(F8, [0x180], None)
     assert not tab_live._frame_matches(F8, [0x500], None)
-    assert tab_live._frame_matches(F8, [], 2)          # F8 hat msg_type 2 (response)
+    assert tab_live._frame_matches(F8, [], 2)          # F8 has msg_type 2 (response)
     assert not tab_live._frame_matches(F8, [], 1)
     assert not tab_live._frame_matches({"id": 0x180, "data": b""}, [], 2)
 

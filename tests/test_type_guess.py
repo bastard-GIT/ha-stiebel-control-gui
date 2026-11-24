@@ -1,4 +1,4 @@
-"""Tests fuer gui/type_guess.py (ohne Qt, ohne paho)."""
+"""Tests for gui/type_guess.py (no Qt, no paho)."""
 import csv
 import json
 import os
@@ -14,7 +14,7 @@ import pytest  # noqa: E402
 import type_guess  # noqa: E402
 from type_guess import analyse, guess_types, load_mkgit_table  # noqa: E402
 
-NEEDS_TABLE_H = pytest.mark.skipif(not type_guess.MKGIT_DEFAULT.exists(), reason="ElsterTable.h fehlt (ELSTER_TABLE_H setzen, Quelle: ha-stiebel-control)")
+NEEDS_TABLE_H = pytest.mark.skipif(not type_guess.MKGIT_DEFAULT.exists(), reason="ElsterTable.h missing (set ELSTER_TABLE_H, source: ha-stiebel-control)")
 LOG_DIR = Path(os.environ.get("STIEBEL_LOG_DIR") or Path(__file__).resolve().parents[1] / "logs")
 MITSCHNITT = LOG_DIR / "mitschnitt.jsonl"
 
@@ -26,17 +26,17 @@ def _read_csv(path: Path) -> list[dict]:
 
 def _top(raws):
     result = guess_types(raws)
-    assert result, f"keine Kandidaten fuer {raws}"
+    assert result, f"no candidates for {raws}"
     return result[0]
 
 
 def _build_state_from_mitschnitt(path: Path) -> dict:
-    """Scan KESSEL 0x00-0xFF aus dem Mitschnitt rekonstruieren.
+    """Reconstruct scan KESSEL 0x00-0xFF from the capture.
 
-    Requests: rx/tx-Frames mit id 0x680 (tx true). Member-ID aus d0/d1:
-    ((d0 & 0xF0) << 3) | d1 & 0x7F. Index: d2 (Kurz) oder d3<<8|d4 (Lang, wenn d2 == 0xFA).
-    Antwort: erster Frame mit Absender = Member, msg_type 2, gleicher dekodierter Index,
-    Zeitpunkt nach dem Request, max. 500 ms. Ohne Antwort: kein Item (Timeout).
+    Requests: rx/tx frames with id 0x680 (tx true). Member ID from d0/d1:
+    ((d0 & 0xF0) << 3) | d1 & 0x7F. Index: d2 (short) or d3<<8|d4 (long, if d2 == 0xFA).
+    Response: first frame with sender = member, msg_type 2, same decoded index,
+    time after the request, max. 500 ms. Without response: no item (timeout).
     """
     import elster
 
@@ -54,11 +54,11 @@ def _build_state_from_mitschnitt(path: Path) -> dict:
         data = bytes.fromhex(fr["d"])
         parsed = elster.parse_frame(int(fr["id"], 16), data)
         if parsed and parsed["msg_type"] == 2:
-            # Antwort ohne switch-Feld (Kurzlayout oder 0xFA) gilt als 0xFA
+            # response without switch field (short layout or 0xFA) counts as 0xFA
             r_sw = parsed.get("switch") or 0xFA
             responses.append((fr["t"], parsed["sender"], parsed["index"], parsed["value"], r_sw))
 
-    # Requests nach Switch trennen: Langlayout bei d[2] in {F7,F8,F9,FA}, sonst Standard 0xFA
+    # split requests by switch: long layout if d[2] in {F7,F8,F9,FA}, otherwise default 0xFA
     items_by_sw: dict[int, list[dict]] = {}
     for fr in frames:
         if not (fr["tx"] and fr["id"] == "0x680"):
@@ -75,7 +75,7 @@ def _build_state_from_mitschnitt(path: Path) -> dict:
                 raw = value
                 break
         if raw is None:
-            continue  # Timeout, zaehlt im Scan als ohne Antwort
+            continue  # timeout, counts as unanswered in the scan
         status = "unsupported" if raw == 0x8000 else "ok"
         items_by_sw.setdefault(sw, []).append(
             {"index": f"0x{index:04x}", "raw": f"0x{raw:04x}", "status": status})
@@ -204,18 +204,18 @@ def test_analyse_synthetisch_nach_7_5(tmp_path):
     csv_path, md_path = analyse(str(state_path), prefix)
 
     rows = {r["index"]: r for r in _read_csv(Path(csv_path))}
-    assert set(rows) == {"0x000c", "0x0112"}  # 0x0001 ist 0x8000 -> keine Zeile
-    assert rows["0x000c"]["konstant"] == "nein"  # Scan A1 0x58, Scan A2 0x59, Reread 0x59
+    assert set(rows) == {"0x000c", "0x0112"}  # 0x0001 is 0x8000 -> no row
+    assert rows["0x000c"]["constant"] == "no"  # Scan A1 0x58, Scan A2 0x59, Reread 0x59
     assert rows["0x000c"]["type_ref"] == "et_dec_val"
     assert rows["0x000c"]["raws"] == "0x0058,0x0059,0x0059"
     assert rows["0x0112"]["type_ref"] == "et_betriebsart"
-    assert rows["0x0112"]["konflikt"] == ""
+    assert rows["0x0112"]["conflict"] == ""
 
     md = Path(md_path).read_text(encoding="utf-8")
-    assert "## Vergleich short/long" in md
-    assert "abweichend 1" in md  # 0x000c: short 0x0058 vs long 0x0059
-    assert "## Typkonflikte" in md
-    assert "## Paar-Hinweise" in md
+    assert "## Comparison short/long" in md
+    assert "differs 1" in md  # 0x000c: short 0x0058 vs long 0x0059
+    assert "## Type conflicts" in md
+    assert "## Pair hints" in md
 
 
 @NEEDS_TABLE_H
@@ -236,10 +236,10 @@ def test_analyse_paar_hinweis_fuer_wh_kwh(tmp_path):
     state_path.write_text(json.dumps(state), encoding="utf-8")
     _csv_path, md_path = analyse(str(state_path), str(tmp_path / "auto_pair"))
     md = Path(md_path).read_text(encoding="utf-8")
-    assert "Paar-Hinweise" in md
+    assert "Pair hints" in md
 
 
-@pytest.mark.skipif(not MITSCHNITT.exists(), reason="Mitschnitt fehlt (logs/ nicht im Repo)")
+@pytest.mark.skipif(not MITSCHNITT.exists(), reason="capture missing (logs/ not in repo)")
 def test_analyse_mitschnitt_aussentemp_et_dec_val(tmp_path):
     state = _build_state_from_mitschnitt(MITSCHNITT)
     ok_items = [i for i in state["tasks"][0]["items"] if i["status"] == "ok"]
@@ -253,7 +253,7 @@ def test_analyse_mitschnitt_aussentemp_et_dec_val(tmp_path):
     row = rows["0x000c"]
     assert row["name_ref"] == "AUSSENTEMP"
     assert row["raws"].startswith("0x0058")
-    assert row["kandidaten"].startswith("et_dec_val:")
+    assert row["candidates"].startswith("et_dec_val:")
 
 
 # --- Min/Max (switch 0xF8/0xF9) ----------------------------------------------
@@ -266,7 +266,7 @@ def test_guess_minmax_plausibel_gibt_bonus():
 
 
 def test_guess_minmax_unplausibel_kein_bonus():
-    # Max 0x7000 = 2867.2 Grad, ausserhalb -50..150 fuer et_dec_val
+    # Max 0x7000 = 2867.2 degrees, outside -50..150 for et_dec_val
     mit = dict((n, s) for n, s, _x in guess_types([0x00FB], (0x00E6, 0x7000)))
     assert mit["et_dec_val"] == 0.8
 
@@ -287,7 +287,7 @@ def test_analyse_minmax_getrennt_und_csv_spalten(tmp_path):
             "to": "0x00ff", "done": True,
             "items": [{"index": "0x000c", "raw": "0x00fb", "status": "ok"}],
         }],
-        # Reread mit switch f8 darf nicht in die Standard-Rohwerte rutschen
+        # reread with switch f8 must not leak into the default raw values
         "rereads": [{"member": "0x180", "index": "0x000c", "pass": 1, "t": None,
                      "raw": "0x0050", "status": "ok", "switch": "0xf8"}],
         "minmax": [
@@ -306,11 +306,11 @@ def test_analyse_minmax_getrennt_und_csv_spalten(tmp_path):
     assert row["raws"] == "0x00fb"
     assert row["min"] == "0x00e6"
     assert row["max"] == "0x0100"
-    assert row["kandidaten"].startswith("et_dec_val:0.90")
+    assert row["candidates"].startswith("et_dec_val:0.90")
 
     md = Path(md_path).read_text(encoding="utf-8")
     assert "## Min/Max (switch 0xF8/0xF9)" in md
-    assert "Switch" in md  # Spalte in der Stufen-Tabelle
+    assert "Switch" in md  # column in the stage table
 
 
 @NEEDS_TABLE_H

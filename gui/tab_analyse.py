@@ -1,6 +1,6 @@
-"""Analyse-Tab: Member-Vergleich und Typwahl fuer einen Index.
+"""Analysis tab: member comparison and type choice for an index.
 
-decode_raw ist kein Qt und testbar ohne GUI.
+decode_raw is not Qt and testable without a GUI.
 """
 from __future__ import annotations
 
@@ -35,13 +35,13 @@ from type_guess import guess_types
 
 PSEUDO_TYPES = ("int16", "uint16", "hex", "bits")
 DEFAULT_TYPE = "et_default"
-COLOR_DIFF = "#c62828"      # Abweichung Referenz vs. mk-git (rot)
-COLOR_ANDERS = "#ffe0b2"    # Zeile mit abweichendem Rohwert (orange)
-COLOR_BIT = "#c8e6c9"       # gesetztes Bit im Bits-Reiter (gruen)
-STATUS_TEXT = {"ok": "ok", "unsupported": "nicht unterstuetzt"}
-MEMBER_HEADERS = ["Member", "Antwortzeit ms", "Status", "Rohwert", "Dekodiert",
-                  "Min dekodiert", "Max dekodiert", "Verschiedene Rohwerte", "Abweichung"]
-BITS_HEADERS = ["Bit", "Name", "bestaetigt"]
+COLOR_DIFF = "#c62828"      # deviation reference vs. mk-git (red)
+COLOR_ANDERS = "#ffe0b2"    # row with deviating raw value (orange)
+COLOR_BIT = "#c8e6c9"       # set bit in the Bits tab (green)
+STATUS_TEXT = {"ok": "ok", "unsupported": "not supported"}
+MEMBER_HEADERS = ["Member", "Response time ms", "Status", "Raw value", "Decoded",
+                  "Min decoded", "Max decoded", "Distinct raw values", "Deviation"]
+BITS_HEADERS = ["Bit", "Name", "confirmed"]
 
 
 def _swap16(raw: int) -> int:
@@ -50,8 +50,8 @@ def _swap16(raw: int) -> int:
 
 def decode_raw(raw: int, typ: str, swap: bool = False,
                bits: list[dict] | None = None) -> str:
-    """Rohwert nach Typ als Text. swap: hi/lo vor der Dekodierung tauschen.
-    bits: Bitnamen der Referenz fuer Pseudotyp 'bits'."""
+    """Raw value as text by type. swap: swap hi/lo before decoding.
+    bits: reference bit names for pseudo type 'bits'."""
     raw &= 0xFFFF
     if swap:
         raw = _swap16(raw)
@@ -70,7 +70,7 @@ def decode_raw(raw: int, typ: str, swap: bool = False,
 
 def pick_default_type(ref_type: str | None, mk_type: str | None,
                       guess_best: str | None, types: list[str]) -> str:
-    """Standardtyp: Referenz -> mk-git (ohne et_default) -> beste Vermutung -> et_default."""
+    """Default type: reference -> mk-git (without et_default) -> best guess -> et_default."""
     candidates = (ref_type, None if mk_type == DEFAULT_TYPE else mk_type, guess_best)
     for cand in candidates:
         if cand and cand in types:
@@ -82,7 +82,7 @@ def pick_default_type(ref_type: str | None, mk_type: str | None,
 
 def comment_text(cell: Cell | None, latency_med: float | None, typ: str, swap: bool,
                  bits: list[dict] | None = None) -> str:
-    """Vorbelegung Kommentar: 'Min x / Max y, Antwortzeit z ms' (nur vorhandene Teile)."""
+    """Prefill comment: 'Min x / Max y, Antwortzeit z ms' (only the parts that exist)."""
     parts = []
     if cell is not None and cell.min_raw is not None and cell.max_raw is not None:
         parts.append(f"Min {decode_raw(cell.min_raw, typ, swap, bits)} / "
@@ -93,7 +93,7 @@ def comment_text(cell: Cell | None, latency_med: float | None, typ: str, swap: b
 
 
 def _common_raw(cells: dict[int, Cell]) -> int | None:
-    """Haeufigster letzter Rohwert aller ok-Member."""
+    """Most frequent last raw value of all ok members."""
     raws = [c.raw for c in cells.values() if c.status == "ok" and c.raw is not None]
     return Counter(raws).most_common(1)[0][0] if raws else None
 
@@ -126,7 +126,7 @@ class AnalysePanel(QWidget):
         self._build_ui()
         self.set_models(meas, ref, mkgit)
 
-    # ---- Aufbau ----
+    # ---- Layout ----
     def _build_ui(self) -> None:
         lay = QVBoxLayout(self)
         self._lbl_head = QLabel()
@@ -135,28 +135,28 @@ class AnalysePanel(QWidget):
         lay.addWidget(self._lbl_head)
 
         bar = QHBoxLayout()
-        bar.addWidget(QLabel("Typ"))
+        bar.addWidget(QLabel("Type"))
         self._cmb_typ = QComboBox()
         bar.addWidget(self._cmb_typ, 1)
-        self._chk_swap = QCheckBox("Bytes tauschen")
+        self._chk_swap = QCheckBox("Swap bytes")
         bar.addWidget(self._chk_swap)
         bar.addStretch(1)
-        self._btn_transfer = QPushButton("In Referenz uebertragen")
+        self._btn_transfer = QPushButton("Transfer to reference")
         bar.addWidget(self._btn_transfer)
         lay.addLayout(bar)
 
         self._tbl_member = self._make_table(MEMBER_HEADERS)
-        self._tbl_types = self._make_table(["Typ"])
+        self._tbl_types = self._make_table(["Type"])
         self._tbl_bits = self._make_table(BITS_HEADERS)
         self._tbl_bits.setEditTriggers(QTableWidget.AllEditTriggers)
-        self._btn_bits = QPushButton("Bitnamen in Referenz uebernehmen")
+        self._btn_bits = QPushButton("Apply bit names to reference")
         bits_page = QWidget()
         bits_lay = QVBoxLayout(bits_page)
         bits_lay.addWidget(self._tbl_bits, 1)
         bits_lay.addWidget(self._btn_bits)
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._tbl_member, "Member-Vergleich")
-        self._tabs.addTab(self._tbl_types, "Alle Typen")
+        self._tabs.addTab(self._tbl_member, "Member comparison")
+        self._tabs.addTab(self._tbl_types, "All types")
         self._tabs.addTab(bits_page, "Bits")
         lay.addWidget(self._tabs, 1)
 
@@ -185,7 +185,7 @@ class AnalysePanel(QWidget):
             self._cmb_typ.setCurrentText(current)
         self._cmb_typ.blockSignals(False)
 
-    # ---- Oeffentlich ----
+    # ---- Public ----
     def set_models(self, meas: Measurements, ref: ReferenceModel, mkgit: dict) -> None:
         self._meas = meas
         self._ref = ref
@@ -199,7 +199,7 @@ class AnalysePanel(QWidget):
             self._apply_default_type(index)
         self._refresh()
 
-    # ---- Daten ----
+    # ---- Data ----
     def _minmax_for(self, index: int) -> tuple[int, int] | None:
         for m in sorted(self._meas.cells(index)):
             c = self._meas.cells(index)[m]
@@ -239,7 +239,7 @@ class AnalysePanel(QWidget):
                 return m
         return cands[0]
 
-    # ---- Anzeige ----
+    # ---- Display ----
     def _refresh(self) -> None:
         self._lbl_head.setText(self._header_html())
         self._btn_transfer.setEnabled(self._index is not None)
@@ -250,7 +250,7 @@ class AnalysePanel(QWidget):
     def _header_html(self) -> str:
         idx = self._index
         if idx is None:
-            return "Kein Index gewaehlt"
+            return "No index selected"
         sig = self._ref.signal(idx)
         mk = self._mkgit.get(idx)
         ref_name = sig["name"] if sig else ""
@@ -266,17 +266,17 @@ class AnalysePanel(QWidget):
                 self._ref.member_name(int(owner, 16)) if owner else "")
             owner_txt = f"{owner} {owner_name}".strip() if owner else "-"
             lines.append(
-                "Referenz: " + _span(ref_name, name_bad) + " | Typ "
+                "Reference: " + _span(ref_name, name_bad) + " | Type "
                 + _span(ref_type, type_bad) + " | Owner " + html.escape(owner_txt)
                 + " | " + html.escape(sig.get("comment") or "")
             )
         else:
-            lines.append("Referenz: nicht in Referenz")
+            lines.append("Reference: not in reference")
         if mk:
-            lines.append("mk-git: " + _span(mk_name, name_bad) + " | Typ "
+            lines.append("mk-git: " + _span(mk_name, name_bad) + " | Type "
                          + _span(mk_type, type_bad))
         else:
-            lines.append("mk-git: nicht in mk-git")
+            lines.append("mk-git: not in mk-git")
         return "<br>".join(lines)
 
     def _refresh_tables(self) -> None:
@@ -314,7 +314,7 @@ class AnalysePanel(QWidget):
                 min_txt,
                 max_txt,
                 str(len(set(c.raws))),
-                "anders" if anders else "",
+                "differs" if anders else "",
             ]
             for col, text in enumerate(values):
                 item = QTableWidgetItem(text)
@@ -328,7 +328,7 @@ class AnalysePanel(QWidget):
         tbl.setColumnCount(1)
         idx = self._index
         if idx is None:
-            tbl.setHorizontalHeaderLabels(["Typ"])
+            tbl.setHorizontalHeaderLabels(["Type"])
             return
         cells = self._meas.cells(idx)
         members = self._owner_candidates(idx)
@@ -338,7 +338,7 @@ class AnalysePanel(QWidget):
         types = [self._cmb_typ.itemText(i) for i in range(self._cmb_typ.count())]
 
         tbl.setColumnCount(1 + len(members))
-        tbl.setHorizontalHeaderLabels(["Typ"] + [_member_label(self._ref, m) for m in members])
+        tbl.setHorizontalHeaderLabels(["Type"] + [_member_label(self._ref, m) for m in members])
         tbl.setRowCount(len(types))
         for r, typ in enumerate(types):
             label = QTableWidgetItem(typ)
@@ -366,7 +366,7 @@ class AnalysePanel(QWidget):
         tbl.setRowCount(0)
         idx = self._index
         members = self._owner_candidates(idx) if idx is not None else []
-        headers = BITS_HEADERS + [_member_label(self._ref, m) for m in members] + ["wechselt"]
+        headers = BITS_HEADERS + [_member_label(self._ref, m) for m in members] + ["changes"]
         tbl.setColumnCount(len(headers))
         tbl.setHorizontalHeaderLabels(headers)
         if idx is None:
@@ -392,7 +392,7 @@ class AnalysePanel(QWidget):
                     item.setBackground(QColor(COLOR_BIT))
                 tbl.setItem(bit, col, item)
             changed = {(r >> bit) & 1 for r in seen} == {0, 1}
-            tbl.setItem(bit, len(headers) - 1, _readonly("ja" if changed else "nein"))
+            tbl.setItem(bit, len(headers) - 1, _readonly("yes" if changed else "no"))
 
     def _collect_bits(self) -> list[dict]:
         tbl = self._tbl_bits
@@ -410,17 +410,17 @@ class AnalysePanel(QWidget):
     def _on_apply_bits(self) -> None:
         bits = self._collect_bits()
         if not bits:
-            QMessageBox.information(self, "Bitnamen", "Keine Bitnamen eingetragen.")
+            QMessageBox.information(self, "Bit names", "No bit names entered.")
             return
         try:
             self._apply_bits(bits)
         except ReferenceError as exc:
-            QMessageBox.warning(self, "Bitnamen uebernehmen", str(exc))
+            QMessageBox.warning(self, "Apply bit names", str(exc))
 
     def _apply_bits(self, bits: list[dict]) -> None:
-        """Schreibt Bitnamen in die Referenz. Owner: Member mit meisten ok-Antworten. Wirft ReferenceError."""
+        """Writes bit names to the reference. Owner: member with most ok responses. Raises ReferenceError."""
         if self._index is None:
-            raise ReferenceError("Kein Index gewaehlt")
+            raise ReferenceError("No index selected")
         cells = self._meas.cells(self._index)
         cands = self._owner_candidates(self._index)
         owner = max(cands, key=lambda m: len(cells[m].raws)) if cands else None
@@ -428,7 +428,7 @@ class AnalysePanel(QWidget):
         self.referenceChanged.emit()
         self._refresh()
 
-    # ---- Uebertragen ----
+    # ---- Transfer ----
     def _open_transfer(self) -> None:
         idx = self._index
         if idx is None:
@@ -447,7 +447,7 @@ class AnalysePanel(QWidget):
         owner_default = self._default_owner(idx)
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(f"In Referenz uebertragen: 0x{idx:04x}")
+        dlg.setWindowTitle(f"Transfer to reference: 0x{idx:04x}")
         form = QFormLayout(dlg)
 
         ed_name = QLineEdit(name)
@@ -458,7 +458,7 @@ class AnalysePanel(QWidget):
         pick = typ_sel if typ_sel in self._ref.types else DEFAULT_TYPE
         if pick in self._ref.types:
             cmb_typ.setCurrentText(pick)
-        form.addRow("Typ", cmb_typ)
+        form.addRow("Type", cmb_typ)
 
         cmb_owner = QComboBox()
         for m in self._owner_candidates(idx):
@@ -472,7 +472,7 @@ class AnalysePanel(QWidget):
         comment = comment_text(cells.get(owner_default) if owner_default is not None else None,
                                med, typ_sel, swap, self._bits_list(idx))
         ed_comment = QLineEdit(comment)
-        form.addRow("Kommentar", ed_comment)
+        form.addRow("Comment", ed_comment)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         form.addRow(buttons)
@@ -484,7 +484,7 @@ class AnalysePanel(QWidget):
                                      int(owner) if owner is not None else None,
                                      ed_comment.text())
             except ReferenceError as exc:
-                QMessageBox.warning(dlg, "In Referenz uebertragen", str(exc))
+                QMessageBox.warning(dlg, "Transfer to reference", str(exc))
                 return
             dlg.accept()
 
@@ -493,9 +493,9 @@ class AnalysePanel(QWidget):
         dlg.exec()
 
     def _apply_transfer(self, name: str, typ: str, owner: int | None, kommentar: str) -> dict:
-        """Schreibt in die Referenz-Arbeitskopie. Wirft ReferenceError bei Fehler."""
+        """Writes to the reference working copy. Raises ReferenceError on error."""
         if self._index is None:
-            raise ReferenceError("Kein Index gewaehlt")
+            raise ReferenceError("No index selected")
         sig = self._ref.upsert_signal(self._index, name, typ, owner, kommentar)
         self.referenceChanged.emit()
         self._refresh()

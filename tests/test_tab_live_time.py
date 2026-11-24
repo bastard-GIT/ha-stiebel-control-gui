@@ -54,39 +54,39 @@ def _clock(ts):
 
 
 def test_uhrzeit_column_follows_zeit():
-    assert tab_live.COLUMNS[0] == "Zeit (ms)"
-    assert tab_live.COLUMNS[1] == "Uhrzeit"
+    assert tab_live.COLUMNS[0] == "Time (ms)"
+    assert tab_live.COLUMNS[1] == "Clock time"
 
 
 def test_time_without_ts_shows_t_and_no_clock(app, db):
     model = _model(db, [F8])
-    assert _cell(model, 0, _col("Zeit (ms)")) == "1000"
-    assert _cell(model, 0, _col("Uhrzeit")) == ""
-    assert model.data(model.index(0, _col("Zeit (ms)")), Qt.ToolTipRole) is None
+    assert _cell(model, 0, _col("Time (ms)")) == "1000"
+    assert _cell(model, 0, _col("Clock time")) == ""
+    assert model.data(model.index(0, _col("Time (ms)")), Qt.ToolTipRole) is None
 
 
 def test_time_with_ts_shows_unix_seconds_three_decimals(app, db):
     model = _model(db, [F8_TS])
-    assert _cell(model, 0, _col("Zeit (ms)")) == "1761038123.456"
-    assert _cell(model, 0, _col("Uhrzeit")) == _clock(TS)
+    assert _cell(model, 0, _col("Time (ms)")) == "1761038123.456"
+    assert _cell(model, 0, _col("Clock time")) == _clock(TS)
     assert len(_clock(TS)) == 12  # HH:MM:SS.mmm
-    assert model.data(model.index(0, _col("Uhrzeit")), Qt.ToolTipRole) is None
+    assert model.data(model.index(0, _col("Clock time")), Qt.ToolTipRole) is None
 
 
 def test_ts_three_decimals_padded(app, db):
     model = _model(db, [dict(F8, ts=1761038123.5)])
-    assert _cell(model, 0, _col("Zeit (ms)")) == "1761038123.500"
+    assert _cell(model, 0, _col("Time (ms)")) == "1761038123.500"
 
 
 def test_pc_source_marks_clock_and_tooltip(app, db):
     model = _model(db, [F8_PC])
-    idx = model.index(0, _col("Uhrzeit"))
-    assert _cell(model, 0, _col("Uhrzeit")) == _clock(TS) + " ~"
-    assert model.data(idx, Qt.ToolTipRole) == "PC-Naehrung"
+    idx = model.index(0, _col("Clock time"))
+    assert _cell(model, 0, _col("Clock time")) == _clock(TS) + " ~"
+    assert model.data(idx, Qt.ToolTipRole) == "PC estimate"
 
 
 def test_sort_key_numeric_by_ts(app, db):
-    # Lexikografisch wuerde "1000.250" vor "999.500" stehen; numerisch nicht.
+    # Lexicographic order would put "1000.250" before "999.500"; numeric order does not.
     a = dict(F8, t=10, ts=1000.25)
     b = dict(F8, t=5000, ts=999.5)
     model = _model(db, [a, b])
@@ -117,8 +117,8 @@ def test_rows_roundtrip_keeps_ts_and_src(app, db):
 
     again = _model(db, rows)
     assert again.rows() == rows
-    assert _cell(again, 0, _col("Zeit (ms)")) == "1761038123.456"
-    assert _cell(again, 1, _col("Zeit (ms)")) == "1040"
+    assert _cell(again, 0, _col("Time (ms)")) == "1761038123.456"
+    assert _cell(again, 1, _col("Time (ms)")) == "1040"
 
 
 def test_load_rows_accepts_legacy_without_ts(app, db):
@@ -127,5 +127,5 @@ def test_load_rows_accepts_legacy_without_ts(app, db):
     assert rows[0]["ts"] is None
     legacy = [{"t": 1000, "id": 0x180, "data": F8["data"], "tx": False}]
     model.load_rows(legacy)
-    assert _cell(model, 0, _col("Uhrzeit")) == ""
+    assert _cell(model, 0, _col("Clock time")) == ""
     assert model.rows()[0]["ts"] is None

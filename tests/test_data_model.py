@@ -1,4 +1,4 @@
-"""Tests fuer gui/data_model.py (ohne Qt). Alle Dateien liegen in tmp_path."""
+"""Tests for gui/data_model.py (no Qt). All files live in tmp_path."""
 import json
 import sys
 from pathlib import Path
@@ -10,7 +10,7 @@ if str(GUI_DIR) not in sys.path:
 from data_model import PRIO_CSV, PRIO_STATE, Measurements  # noqa: E402
 
 
-# ---- Hilfsfunktionen ----
+# ---- Helper functions ----
 
 def _write_json(tmp_path, name, obj):
     path = tmp_path / name
@@ -30,13 +30,13 @@ CSV_HEADER = "index;name_ref;typ_ref;owner_ref;name_mkgit;typ_mkgit;0x180;0x200;
 def _csv_lines():
     return [
         CSV_HEADER,
-        # Index 0x0208: 0x180 mit Min/Max-Text, 0x200 mit Rohwert + Text,
-        # 0x201 nicht unterstuetzt, 0x202 mit Min/Max-Rohwerten, 0x480 leer
+        # Index 0x0208: 0x180 with min/max text, 0x200 with raw value + text,
+        # 0x201 not supported, 0x202 with min/max raw values, 0x480 empty
         "0x0208;NAME_A;;;;;52.0 [0x0208] (min 10.0 / max 60.0);"
         "0x00e6 (23.0 (min 5.0 / max 30.0));nicht unterst.;0x0125 (min 0x0032 / max 0x00c8);",
-        # Index 0x0301: nur 0x480 hat einen Wert
+        # Index 0x0301: only 0x480 has a value
         "0x0301;NAME_B;;;;;;;;;0x0064",
-        # Latenz-Zeilen (erste Spalte leer, Label in Spalte 2)
+        # latency rows (first column empty, label in column 2)
         ";ANTWORTZEIT Median ms;;;;;20;20;20;20;20",
         ";ANTWORTZEIT p90 ms;;;;;25;26;25;26;25",
         ";ANTWORTZEIT max ms;;;;;1041;278;287;263;244",
@@ -98,7 +98,7 @@ def test_state_minmax_setzt_min_und_max_raw(tmp_path):
         "minmax": [
             {"member": "0x180", "index": "0x0001", "switch": "0xf8", "raw": "0x000a", "status": "ok"},
             {"member": "0x180", "index": "0x0001", "switch": "0xf9", "raw": "0x003c", "status": "ok"},
-            # ungueltige Eintraege werden ignoriert
+            # invalid entries are ignored
             {"member": "0x180", "index": "0x0001", "switch": "0xf9", "raw": "0x0001", "status": "timeout"},
             {"member": "0x180", "index": "0x0001", "switch": "0xf8", "raw": None, "status": "ok"},
         ],
@@ -125,7 +125,7 @@ def test_state_unsupported_und_ok_mischung(tmp_path):
     meas.load_state(_write_json(tmp_path, "s.json", state))
     assert meas.cells(5)[0x180].status == "unsupported"
     assert meas.cells(5)[0x180].raws == []
-    # ok bleibt ok, auch wenn spaeter unsupported kommt
+    # ok stays ok, even if unsupported comes later
     assert meas.cells(6)[0x180].status == "ok"
     assert meas.members == [0x180]
     assert meas.indices == [6]
@@ -144,7 +144,7 @@ def test_state_indices_und_members_nur_mit_ok(tmp_path):
     meas.load_state(_write_json(tmp_path, "s.json", state))
     assert meas.members == [0x180]
     assert meas.indices == [1]
-    # Zellen ohne ok bleiben im Modell, zaehlen aber nicht
+    # cells without ok stay in the model, but are not counted
     assert 0x201 not in meas.members
     assert meas.cells(3)[0x201].status == "none"
     assert 3 not in meas.indices
@@ -168,7 +168,7 @@ def test_state_sources_und_rueckgabe(tmp_path):
 def test_csv_zellen_werden_geparst(tmp_path):
     meas = Measurements()
     n = meas.load_csv(_write_csv(tmp_path, "bekannt.csv", _csv_lines()))
-    # ok-Zellen: 0x0208/0x180, 0x0208/0x200, 0x0208/0x202, 0x0301/0x480
+    # ok cells: 0x0208/0x180, 0x0208/0x200, 0x0208/0x202, 0x0301/0x480
     assert n == 4
 
     a = meas.cells(0x0208)
@@ -189,7 +189,7 @@ def test_csv_zellen_werden_geparst(tmp_path):
     assert a[0x202].max_raw == 0x00C8
     assert a[0x202].mm_text == ""
 
-    assert 0x480 not in a  # leere Zelle wird uebersprungen
+    assert 0x480 not in a  # empty cell is skipped
     assert meas.cells(0x0301)[0x480].raws == [0x0064]
 
 
@@ -205,14 +205,14 @@ def test_csv_latenz_zeilen_landen_in_latency(tmp_path):
     meas.load_csv(_write_csv(tmp_path, "bekannt.csv", _csv_lines()))
     assert meas.latency[0x180] == {"med": 20.0, "p90": 25.0, "max": 1041.0}
     assert meas.latency[0x200] == {"med": 20.0, "p90": 26.0, "max": 278.0}
-    # Latenzzeilen sind keine Messindizes
+    # latency rows are not measurement indices
     assert 0 not in meas.by_index
     assert "" not in meas.by_index
     assert meas.indices == [0x0208, 0x0301]
 
 
 def test_csv_utf8_sig_bom_und_semikolon(tmp_path):
-    # BOM am Dateianfang darf die Member-Spalten nicht kaputt machen
+    # BOM at the file start must not break the member columns
     meas = Measurements()
     n = meas.load_csv(_write_csv(tmp_path, "bekannt.csv", _csv_lines()))
     assert n > 0
@@ -243,7 +243,7 @@ def test_merge_state_vor_csv_state_zuerst(tmp_path):
     assert cell.raws == [0x0209]
     assert cell.raw == 0x0209
     assert cell.prio == PRIO_STATE
-    # CSV-only Zelle bleibt erhalten
+    # CSV-only cell is kept
     assert meas.cells(0x0301)[0x480].raws == [0x0064]
 
 
@@ -289,7 +289,7 @@ def test_load_any_waehlt_nach_endung(tmp_path, monkeypatch):
     meas = Measurements()
     assert meas.load_any(csv_path) == 4
     assert meas.sources == ["bekannt.csv"]
-    assert meas.latency  # CSV-Latenz wurde gelesen
+    assert meas.latency  # CSV latency was read
 
     meas2 = Measurements()
     assert meas2.load_any(state_path) == 1

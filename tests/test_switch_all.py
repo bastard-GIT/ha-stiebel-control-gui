@@ -1,10 +1,10 @@
-"""Tests fuer Switch 'alle' in Tab Abfrage und Tab Scanner.
+"""Tests for switch 'alle' in query tab and scanner tab.
 
-'alle' sendet drei normale Kommandos nacheinander (Switch 0xFA, 0xF8, 0xF9); die Firmware
-kennt kein 'alle'. Fake-Bridge mit denselben Signalen und Sendemethoden wie MqttBridge.
-Qt laeuft offscreen; das Query-Timeout wird ueber tab_query.SEQ_TIMEOUT_MS verkuerzt.
+'alle' sends three normal commands in sequence (switch 0xFA, 0xF8, 0xF9); the firmware
+does not know 'alle'. Fake bridge with the same signals and send methods as MqttBridge.
+Qt runs offscreen; the query timeout is shortened via tab_query.SEQ_TIMEOUT_MS.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_switch_all.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_switch_all.py -q
 """
 
 import os
@@ -73,7 +73,7 @@ def _wait_until(cond, timeout_ms=2000):
     deadline = time.monotonic() + timeout_ms / 1000.0
     while not cond():
         if time.monotonic() > deadline:
-            raise AssertionError("Timeout beim Warten auf Bedingung")
+            raise AssertionError("Timeout waiting for condition")
         QTest.qWait(5)
 
 
@@ -81,7 +81,7 @@ def _switches(reads):
     return [r[3] for r in reads]
 
 
-# ---------------------------------------------------------------- Tab Abfrage
+# ---------------------------------------------------------------- Query tab
 
 def _query_tab(db, fake, switch=tab_query.SWITCH_ALL):
     fake.firmware_kind.emit("debug")
@@ -108,7 +108,7 @@ def test_query_all_sends_fa_f8_f9_in_order(qapp, db):
     fake.read_result.emit(_read(tab, F8))
     assert _switches(fake.reads) == [FA, F8, F9]
     fake.read_result.emit(_read(tab, F9))
-    assert _switches(fake.reads) == [FA, F8, F9]  # keine weiteren Anfragen
+    assert _switches(fake.reads) == [FA, F8, F9]  # no further requests
     assert tab._query_btn.isEnabled()
 
 
@@ -117,11 +117,11 @@ def test_query_all_timeout_goes_to_next(qapp, db, monkeypatch):
     fake = FakeBridge()
     tab = _query_tab(db, fake)
     tab._on_query()
-    fake.read_result.emit(_read(tab, FA))  # aktuell kommt, min kommt nicht
+    fake.read_result.emit(_read(tab, FA))  # current arrives, min does not
     _wait_until(lambda: len(fake.reads) == 3)
     assert _switches(fake.reads) == [FA, F8, F9]
     fake.read_result.emit(_read(tab, F9))
-    assert tab._info_label.text().split(" | ")[1] == "min: keine Antwort"
+    assert tab._info_label.text().split(" | ")[1] == "min: no answer"
     assert tab._query_btn.isEnabled()
 
 
@@ -133,11 +133,11 @@ def test_query_all_summary_line(qapp, db):
     fake.read_result.emit(_read(tab, F8, status="unsupported", raw=None))
     parts = tab._info_label.text().split(" | ")
     assert len(parts) == 3
-    assert parts[0].startswith("aktuell: ") and parts[0] != "aktuell: -"
-    assert parts[1] == "min: nicht unterstuetzt"
-    assert parts[2] == "max: -"  # noch nicht eingetroffen
+    assert parts[0].startswith("current: ") and parts[0] != "current: -"
+    assert parts[1] == "min: not supported"
+    assert parts[2] == "max: -"  # not arrived yet
     fake.read_result.emit(_read(tab, F9, status="timeout", raw=None))
-    assert tab._info_label.text().split(" | ")[2] == "max: keine Antwort"
+    assert tab._info_label.text().split(" | ")[2] == "max: no answer"
 
 
 def test_query_all_history_gets_one_row_per_result(qapp, db):
@@ -149,7 +149,7 @@ def test_query_all_history_gets_one_row_per_result(qapp, db):
     assert tab._table.rowCount() == 3
     sw_col = tab_query.HEADERS.index("Switch")
     labels = {tab._table.item(r, sw_col).text() for r in range(3)}
-    assert labels == {"", "min", "max"}  # switch_label(0xFA) ist leer, wie bisher im Verlauf
+    assert labels == {"", "min", "max"}  # switch_label(0xFA) is empty, as before in the history
 
 
 def test_query_all_button_locked_during_sequence(qapp, db, monkeypatch):
@@ -158,7 +158,7 @@ def test_query_all_button_locked_during_sequence(qapp, db, monkeypatch):
     tab = _query_tab(db, fake)
     tab._on_query()
     assert not tab._query_btn.isEnabled()
-    tab._on_query()  # z.B. Enter im Indexfeld: keine zweite Sequenz
+    tab._on_query()  # e.g. Enter in index field: no second sequence
     assert len(fake.reads) == 1
     fake.read_result.emit(_read(tab, FA))
     assert not tab._query_btn.isEnabled()
@@ -170,7 +170,7 @@ def test_query_all_button_locked_during_sequence(qapp, db, monkeypatch):
 
 
 def test_query_all_firmware_prod_keeps_sequence(qapp, db, monkeypatch):
-    # Produktiv-Firmware (raw/read) beantwortet alle drei Switches: Sequenz laeuft weiter.
+    # Production firmware (raw/read) answers all three switches: sequence continues.
     monkeypatch.setattr(tab_query, "SEQ_TIMEOUT_MS", 30)
     fake = FakeBridge()
     tab = _query_tab(db, fake)
@@ -191,9 +191,9 @@ def test_query_all_firmware_unknown_aborts(qapp, db, monkeypatch):
     tab = _query_tab(db, fake)
     tab._on_query()
     fake.firmware_kind.emit("unknown")
-    assert not tab._query_btn.isEnabled()  # Bedienelemente gesperrt
+    assert not tab._query_btn.isEnabled()  # controls locked
     fake.read_result.emit(_read(tab, FA))
-    QTest.qWait(120)  # Timeout-Timer darf nach dem Abbruch nichts mehr senden
+    QTest.qWait(120)  # timeout timer must not send anything after abort
     assert len(fake.reads) == 1
     fake.firmware_kind.emit("debug")
     assert tab._query_btn.isEnabled()
@@ -210,14 +210,14 @@ def test_query_single_aktuell_sends_one_read(qapp, db):
     assert tab._query_btn.isEnabled()
 
 
-# ---------------------------------------------------------------- Tab Scanner
+# ---------------------------------------------------------------- Scanner tab
 
 def _scanner_tab(db, fake, switch=tab_scanner.SWITCH_ALL):
     fake.firmware_kind.emit("debug")
     tab = tab_scanner.ScannerTab(db, fake)
     fake.firmware_kind.emit("debug")
     tab._from.setText("0x4e00")
-    tab._to.setText("0x4e0f")  # 16 Indizes je Scan
+    tab._to.setText("0x4e0f")  # 16 indices per scan
     tab._switch.setCurrentIndex(tab._switch.findData(switch))
     return tab
 
@@ -233,14 +233,14 @@ def test_scanner_all_runs_three_scans_in_order(qapp, db):
     member = tab._member.currentData()
     assert fake.scans == [(member, 0x4E00, 0x4E0F, tab._delay.value(), "auto", FA)]
     fake.scan_progress.emit(_progress(FA, 8))
-    assert len(fake.scans) == 1  # Scan noch nicht fertig
+    assert len(fake.scans) == 1  # scan not finished yet
     fake.scan_progress.emit(_progress(FA, 16, state="done"))
     assert [s[5] for s in fake.scans] == [FA, F8]
     fake.scan_progress.emit(_progress(F8, 16, state="done"))
     assert [s[5] for s in fake.scans] == [FA, F8, F9]
-    assert all(s[:5] == fake.scans[0][:5] for s in fake.scans)  # gleicher Bereich, Pause, Format
+    assert all(s[:5] == fake.scans[0][:5] for s in fake.scans)  # same range, pause, format
     fake.scan_progress.emit(_progress(F9, 16, state="done"))
-    assert [s[5] for s in fake.scans] == [FA, F8, F9]  # nichts mehr
+    assert [s[5] for s in fake.scans] == [FA, F8, F9]  # nothing more
     assert tab._start_btn.isEnabled()
     assert not tab._stop_btn.isEnabled()
 
@@ -269,7 +269,7 @@ def test_scanner_all_stop_aborts(qapp, db):
     tab._on_stop()
     assert fake.stops == 1
     fake.scan_progress.emit(_progress(FA, 16, state="done"))
-    assert len(fake.scans) == 1  # kein weiterer Scan nach Stopp
+    assert len(fake.scans) == 1  # no further scan after stop
     assert not tab._stop_btn.isEnabled()
 
 
@@ -302,11 +302,11 @@ def test_scanner_all_estimate_counts_three_scans(qapp, db):
     fake = FakeBridge()
     tab = _scanner_tab(db, fake, switch=tab_scanner.SWITCH_ALL)
     tab._from.setText("0x0000")
-    tab._to.setText("0x0fff")  # 4096 Indizes je Scan
-    assert "12288 Indizes" in tab._estimate.text()
+    tab._to.setText("0x0fff")  # 4096 indices per scan
+    assert "12288 indices" in tab._estimate.text()
     tab._switch.setCurrentIndex(tab._switch.findData(FA))
-    assert "4096 Indizes" in tab._estimate.text()
-    assert "Scans" not in tab._estimate.text()
+    assert "4096 indices" in tab._estimate.text()
+    assert "scans" not in tab._estimate.text()
 
 
 def test_scanner_all_warning_uses_total(qapp, db, monkeypatch):
@@ -316,12 +316,12 @@ def test_scanner_all_warning_uses_total(qapp, db, monkeypatch):
     fake = FakeBridge()
     tab = _scanner_tab(db, fake)
     tab._from.setText("0x0000")
-    tab._to.setText("0x0aff")  # 2816 je Scan: einzeln unter 4096, als 'alle' 8448
+    tab._to.setText("0x0aff")  # 2816 per scan: single below 4096, as 'alle' 8448
     tab._on_start()
     assert len(warnings) == 1
     assert "8448" in warnings[0][2]
     assert fake.scans == []
     tab._switch.setCurrentIndex(tab._switch.findData(FA))
     tab._on_start()
-    assert len(warnings) == 1  # Einzelscan unter Limit: keine Warnung
+    assert len(warnings) == 1  # single scan below limit: no warning
     assert len(fake.scans) == 1

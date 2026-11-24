@@ -1,4 +1,4 @@
-"""Tests fuer Bitfelder in gui/elster.py (ohne Qt, ohne paho)."""
+"""Tests for bit fields in gui/elster.py (no Qt, no paho)."""
 import json
 import shutil
 import sys
@@ -46,7 +46,7 @@ def test_decode_bits_warmwasser():
 
 def test_bits_for_builtin_and_none():
     db = ElsterDb()
-    # Die Referenz hat eigene Bits fuer 0x0176 (mit Kommentaren); Bitnummern und Namen gleich der Vorgabe
+    # The reference has its own bits for 0x0176 (with comments); bit numbers and names equal the built-in default
     assert [(b["bit"], b["name"]) for b in db.bits_for(0x0176)] ==         [(b["bit"], b["name"]) for b in BUILTIN_BITS[0x0176]]
     assert db.bits_for(0x0003) is None
 
@@ -69,7 +69,7 @@ def test_bits_override_from_reference_json(tmp_path):
 
     table = json.loads(kopie.read_text(encoding="utf-8"))
     hits = [s for s in table["signals"] if int(str(s["index"]), 16) == 0x0003]
-    assert hits, "Signal 0x0003 fehlt in Referenz-JSON"
+    assert hits, "Signal 0x0003 missing in reference JSON"
     for s in hits:
         s["bits"] = [{"bit": 1, "name": "X"}]
     kopie.write_text(json.dumps(table, ensure_ascii=False), encoding="utf-8")

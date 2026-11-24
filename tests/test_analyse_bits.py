@@ -1,4 +1,4 @@
-"""Smoke: Bits-Reiter der Auswerte-GUI (offscreen)."""
+"""Smoke: Bits tab of the analysis GUI (offscreen)."""
 import os
 import sys
 from pathlib import Path
@@ -29,5 +29,5 @@ def test_bits_tab_zeigt_gesetzte_bits():
     t = tables[0]
     assert t.item(0, 1).text() == "VERDICHTER"
     assert t.item(0, 3).text() == "1" and t.item(14, 3).text() == "0"
-    assert t.item(0, t.columnCount() - 1).text() == "ja"   # Bit 0 wechselt 0 -> 1
-    assert t.item(14, t.columnCount() - 1).text() == "nein"
+    assert t.item(0, t.columnCount() - 1).text() == "yes"   # bit 0 changes 0 -> 1
+    assert t.item(14, t.columnCount() - 1).text() == "no"

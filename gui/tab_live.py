@@ -1,7 +1,7 @@
-"""Live-Tab: zeigt CAN-Frames vom ESP in Echtzeit (Elster-Dekodierung).
+"""Live tab: shows CAN frames from the ESP in real time (Elster decoding).
 
-Abhaengigkeiten laut INTERFACES.md 5.1 / 5.2 / 5.3. Kein direkter Zugriff
-von Hintergrund-Threads; alle Daten kommen ueber bridge.rx_frames (Qt-Signal).
+Dependencies per INTERFACES.md 5.1 / 5.2 / 5.3. No direct access
+from background threads; all data arrives via bridge.rx_frames (Qt signal).
 """
 
 from __future__ import annotations
@@ -35,36 +35,36 @@ from mqtt_client import FW_PROD, FW_UNKNOWN, MqttBridge
 
 MAX_ROWS = 50000
 FLUSH_MS = 100
-LATEST_REFRESH_TICKS = 5  # Filter-Neuberechnung im Modus "letzter Wert" alle 500 ms
+LATEST_REFRESH_TICKS = 5  # Filter recalculation in "last value" mode every 500 ms
 
 COLUMNS = [
-    "Zeit (ms)",
-    "Uhrzeit",
-    "Richtung",
-    "CAN-ID",
-    "Absender",
-    "Empfaenger",
-    "Nachrichtenart",
+    "Time (ms)",
+    "Clock time",
+    "Direction",
+    "CAN ID",
+    "Sender",
+    "Receiver",
+    "Message type",
     "Index",
     "Switch",
     "Name",
-    "Rohwert",
-    "Wert",
+    "Raw value",
+    "Value",
 ]
 
-MODE_ALL = "alle Frames"
-MODE_LATEST = "letzter Wert pro Index"
+MODE_ALL = "all frames"
+MODE_LATEST = "last value per index"
 
 SYSTEM_NAME = "SYSTEM_0xFE"
 SYSTEM_TYPE_NAMES = {6: "system", 7: "system-resp"}
 
-TIME_COLUMNS = (0, 1)        # "Zeit (ms)" und "Uhrzeit": sortieren nach ts (sonst t)
+TIME_COLUMNS = (0, 1)        # "Time (ms)" and "Clock time": sort by ts (else t)
 SORT_ROLE = int(Qt.UserRole) + 1
-PC_HINT = "PC-Naehrung"      # ts_src == 'pc': Zeitstempel vom PC genaehert
+PC_HINT = "PC estimate"      # ts_src == 'pc': timestamp estimated by the PC
 
 
 class _Rec:
-    """Eine Zeile: Rohdaten plus dekodierte Felder (einmal beim Einfuegen berechnet)."""
+    """One row: raw data plus decoded fields (computed once on insert)."""
 
     __slots__ = (
         "seq", "t", "ts", "ts_src", "id", "data", "tx",
@@ -74,7 +74,7 @@ class _Rec:
 
 
 def _latest_key(rec: _Rec) -> tuple:
-    """Schluessel fuer 'letzter Wert pro Index': (Sender-CAN-ID, Index, Switch)."""
+    """Key for 'last value per index': (sender CAN ID, index, switch)."""
     return (rec.id, rec.index, rec.switch)
 
 
@@ -83,12 +83,12 @@ def _hex_or_empty(v, fmt: str) -> str:
 
 
 def _time_text(rec: _Rec) -> str:
-    """Spalte 'Zeit (ms)': Unix-Zeit mit 3 Nachkommastellen wenn ts, sonst t."""
+    """Column 'Time (ms)': Unix time with 3 decimals if ts, else t."""
     return str(rec.t) if rec.ts is None else "%.3f" % rec.ts
 
 
 def _clock_text(rec: _Rec) -> str:
-    """Spalte 'Uhrzeit': lokale Zeit HH:MM:SS.mmm, leer ohne ts; ' ~' bei ts_src 'pc'."""
+    """Column 'Clock time': local time HH:MM:SS.mmm, empty without ts; ' ~' if ts_src 'pc'."""
     if rec.ts is None:
         return ""
     text = datetime.fromtimestamp(rec.ts).strftime("%H:%M:%S.%f")[:-3]
@@ -96,12 +96,12 @@ def _clock_text(rec: _Rec) -> str:
 
 
 def _time_key(rec: _Rec) -> float:
-    """Sortierschluessel der Zeitspalten: ts, sonst t."""
+    """Sort key of the time columns: ts, else t."""
     return float(rec.t) if rec.ts is None else rec.ts
 
 
 def _decode(db: ElsterDb, seq: int, frame: dict) -> _Rec:
-    """Roh-Frame (dict mit t,id,data,tx) in _Rec mit Elster-Feldern umwandeln."""
+    """Convert raw frame (dict with t,id,data,tx) into _Rec with Elster fields."""
     rec = _Rec()
     rec.seq = seq
     rec.t = int(frame["t"])
@@ -136,7 +136,7 @@ def _decode(db: ElsterDb, seq: int, frame: dict) -> _Rec:
         rec.switch = switch_label(parsed.get("switch"))
         rec.raw = parsed["value"]
         if parsed.get("system"):
-            # Systemnachricht (0xFE): kein Signal, Name fest, Typ Standard.
+            # System message (0xFE): no signal, fixed name, type default.
             rec.msg_type_name = SYSTEM_TYPE_NAMES.get(rec.msg_type, rec.msg_type_name)
             rec.name = SYSTEM_NAME
             sig = {}
@@ -144,7 +144,7 @@ def _decode(db: ElsterDb, seq: int, frame: dict) -> _Rec:
             rec.name = db.signal_name(rec.index)
             sig = db.signal_by_index(rec.index) or {}
         try:
-            # Bitfeld-Anzeige nur fuer aktuelle Werte (Min/Max-Antworten bleiben Zahlen)
+            # Bit-field display only for current values (min/max responses stay numbers)
             if parsed.get("system") or rec.switch:
                 rec.value = decode_value(sig.get("type", "et_default"), rec.raw)
             else:
@@ -156,7 +156,7 @@ def _decode(db: ElsterDb, seq: int, frame: dict) -> _Rec:
     rec.sender = sender_txt if sender_txt else ""
     recv_txt = db.member_name(rec.receiver) if rec.receiver is not None else ""
     rec.receiver = recv_txt
-    # Suchtext fuer Textfilter (Index, Switch und Name)
+    # Search text for text filter (index, switch and name)
     rec.search = (
         _hex_or_empty(rec.index, "0x%04x") + " " + rec.switch + " " + rec.name
     ).lower()
@@ -164,17 +164,17 @@ def _decode(db: ElsterDb, seq: int, frame: dict) -> _Rec:
 
 
 class FrameTableModel(QAbstractTableModel):
-    """Haelt bis MAX_ROWS Frames. Aelteste Zeilen werden verworfen."""
+    """Holds up to MAX_ROWS frames. Oldest rows are discarded."""
 
     def __init__(self, db: ElsterDb, parent=None):
         super().__init__(parent)
         self._db = db
         self._recs: deque[_Rec] = deque()
         self._seq = 0
-        # (Sender, Index, Switch) -> seq des juengsten Frames (fuer "letzter Wert")
+        # (sender, index, switch) -> seq of the newest frame (for "last value")
         self._latest: dict[tuple, int] = {}
 
-    # --- Qt-Modell-API ---
+    # --- Qt model API ---
     def rowCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._recs)
 
@@ -225,7 +225,7 @@ class FrameTableModel(QAbstractTableModel):
             return rec.value
         return None
 
-    # --- Eigene API ---
+    # --- Own API ---
     def record(self, row: int) -> _Rec:
         return self._recs[row]
 
@@ -267,13 +267,13 @@ class FrameTableModel(QAbstractTableModel):
         self.endResetModel()
 
     def load_rows(self, rows: list[dict]) -> None:
-        """Ersetzt den Inhalt durch rows (Format {"t","ts","ts_src","id","data","tx"}; ts optional)."""
+        """Replaces content with rows (format {"t","ts","ts_src","id","data","tx"}; ts optional)."""
         self.clear()
         self._seq = 0
         self.append_frames(list(rows))
 
     def rows(self) -> list[dict]:
-        """Alle gespeicherten Frames als {"t","ts","ts_src","id","data","tx"} fuer Export."""
+        """All stored frames as {"t","ts","ts_src","id","data","tx"} for export."""
         return [
             {"t": r.t, "ts": r.ts, "ts_src": r.ts_src,
              "id": r.id, "data": r.data, "tx": r.tx}
@@ -282,12 +282,12 @@ class FrameTableModel(QAbstractTableModel):
 
 
 class _FilterProxy(QSortFilterProxyModel):
-    """Filter nach CAN-ID, Nachrichtenart, Text und 'letzter Wert pro Index'."""
+    """Filter by CAN ID, message type, text and 'last value per index'."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.ids: set[int] = set()        # leer = alle
-        self.msg_type = None              # None = alle
+        self.ids: set[int] = set()        # empty = all
+        self.msg_type = None              # None = all
         self.text = ""                    # lowercase
         self.latest_only = False
 
@@ -299,7 +299,7 @@ class _FilterProxy(QSortFilterProxyModel):
         self.invalidateFilter()
 
     def lessThan(self, left, right) -> bool:
-        # Zeitspalten numerisch nach ts (sonst t) sortieren, nicht als Text.
+        # Sort time columns numerically by ts (else t), not as text.
         if left.column() in TIME_COLUMNS and right.column() in TIME_COLUMNS:
             model = self.sourceModel()
             return model.data(left, SORT_ROLE) < model.data(right, SORT_ROLE)
@@ -320,7 +320,7 @@ class _FilterProxy(QSortFilterProxyModel):
 
 
 def _frame_matches(frame: dict, ids: list[int], msg_type) -> bool:
-    """Roh-Frame gegen CAN-ID-Liste (leer = alle) und Nachrichtenart (None = alle) pruefen."""
+    """Check raw frame against CAN ID list (empty = all) and message type (None = all)."""
     if ids and int(frame["id"]) not in ids:
         return False
     if msg_type is not None:
@@ -331,7 +331,7 @@ def _frame_matches(frame: dict, ids: list[int], msg_type) -> bool:
 
 
 def _parse_ids(text: str) -> tuple[list[int], str | None]:
-    """'0x180, 0x500' -> ([0x180, 0x500], None). Bei Fehler ([], Fehlertext)."""
+    """'0x180, 0x500' -> ([0x180, 0x500], None). On error ([], error text)."""
     ids: list[int] = []
     for part in text.split(","):
         part = part.strip()
@@ -340,7 +340,7 @@ def _parse_ids(text: str) -> tuple[list[int], str | None]:
         try:
             ids.append(int(part, 16))
         except ValueError:
-            return [], f"Ungueltige CAN-ID: '{part}'"
+            return [], f"Invalid CAN ID: '{part}'"
     return ids, None
 
 
@@ -350,24 +350,24 @@ class LiveTab(QWidget):
         self._db = db
         self._bridge = bridge
         self._paused = False
-        self._pending: deque[dict] = deque()   # gesammelte Frames, noch nicht im Modell
+        self._pending: deque[dict] = deque()   # collected frames, not yet in the model
         self._latest_dirty = False
         self._tick = 0
-        self._fw = FW_UNKNOWN  # Produktiv-Firmware sendet ungefiltert: Filter in der GUI
+        self._fw = FW_UNKNOWN  # production firmware sends unfiltered: filter in the GUI
 
         self._model = FrameTableModel(db, self)
         self._proxy = _FilterProxy(self)
         self._proxy.setSourceModel(self._model)
 
-        # --- Filterzeile ---
+        # --- Filter row ---
         self._id_edit = QLineEdit()
-        self._id_edit.setPlaceholderText("CAN-IDs hex, z.B. 0x180, 0x500")
+        self._id_edit.setPlaceholderText("CAN IDs hex, e.g. 0x180, 0x500")
         self._type_combo = QComboBox()
-        self._type_combo.addItem("alle Arten", None)
+        self._type_combo.addItem("all types", None)
         for code, name in self._msg_type_choices():
             self._type_combo.addItem(name, code)
         self._text_edit = QLineEdit()
-        self._text_edit.setPlaceholderText("Index, Switch oder Name")
+        self._text_edit.setPlaceholderText("Index, switch or name")
         self._view_combo = QComboBox()
         self._view_combo.addItem(MODE_ALL)
         self._view_combo.addItem(MODE_LATEST)
@@ -375,19 +375,19 @@ class LiveTab(QWidget):
         filter_row = QHBoxLayout()
         filter_row.addWidget(QLabel("CAN-ID:"))
         filter_row.addWidget(self._id_edit, 2)
-        filter_row.addWidget(QLabel("Art:"))
+        filter_row.addWidget(QLabel("Type:"))
         filter_row.addWidget(self._type_combo)
         filter_row.addWidget(QLabel("Text:"))
         filter_row.addWidget(self._text_edit, 2)
         filter_row.addWidget(self._view_combo)
 
-        # --- Steuerzeile ---
+        # --- Control row ---
         self._pause_btn = QPushButton("Pause")
-        self._clear_btn = QPushButton("Loeschen")
+        self._clear_btn = QPushButton("Clear")
         self._autoscroll = QCheckBox("Autoscroll")
         self._autoscroll.setChecked(True)
-        self._sniff_check = QCheckBox("Sniffer an")
-        self._sniff_btn = QPushButton("Sniffer-Filter an ESP senden")
+        self._sniff_check = QCheckBox("Sniffer on")
+        self._sniff_btn = QPushButton("Send sniffer filter to ESP")
         self._status = QLabel("")
 
         ctrl_row = QHBoxLayout()
@@ -398,7 +398,7 @@ class LiveTab(QWidget):
         ctrl_row.addWidget(self._sniff_check)
         ctrl_row.addWidget(self._sniff_btn)
 
-        # --- Tabelle ---
+        # --- Table ---
         self._table = QTableView()
         self._table.setModel(self._proxy)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -416,7 +416,7 @@ class LiveTab(QWidget):
         layout.addWidget(self._table, 1)
         layout.addWidget(self._status)
 
-        # --- Verbindungen ---
+        # --- Connections ---
         self._bridge.rx_frames.connect(self._on_rx_frames)
         self._bridge.firmware_kind.connect(self._on_firmware)
         self._bridge.can_debug_state.connect(self._on_can_debug_state)
@@ -429,7 +429,7 @@ class LiveTab(QWidget):
         self._type_combo.currentIndexChanged.connect(self._apply_filters)
         self._view_combo.currentIndexChanged.connect(self._apply_filters)
 
-        # --- Batch-Timer ---
+        # --- Batch timer ---
         self._timer = QTimer(self)
         self._timer.setInterval(FLUSH_MS)
         self._timer.timeout.connect(self._flush)
@@ -440,7 +440,7 @@ class LiveTab(QWidget):
     # ------------------------------------------------------------------
     @staticmethod
     def _msg_type_choices() -> list[tuple[int, str]]:
-        # Nachrichtenart = data[0] & 0x0F, Namen laut ElsterTable.json frame_format.message_type.
+        # Message type = data[0] & 0x0F, names per ElsterTable.json frame_format.message_type.
         return [
             (0, "write"),
             (1, "read"),
@@ -453,8 +453,8 @@ class LiveTab(QWidget):
         ]
 
     def _update_status(self, msg: str = "") -> None:
-        state = "PAUSIERT" if self._paused else "laeuft"
-        text = f"{state} | Zeilen: {self._model.rowCount()} / {MAX_ROWS} | Puffer: {len(self._pending)}"
+        state = "PAUSED" if self._paused else "running"
+        text = f"{state} | Rows: {self._model.rowCount()} / {MAX_ROWS} | Buffer: {len(self._pending)}"
         if msg:
             text += " | " + msg
         self._status.setText(text)
@@ -464,21 +464,21 @@ class LiveTab(QWidget):
         self._fw = kind
 
     def _on_can_debug_state(self, on: bool) -> None:
-        # Produktiv-Sniffer meldet seinen Zustand (retained): Checkbox nachziehen, ohne zu senden.
+        # Production sniffer reports its state (retained): sync checkbox, without sending.
         if self._fw != FW_PROD:
             return
         self._sniff_check.blockSignals(True)
         self._sniff_check.setChecked(on)
         self._sniff_check.blockSignals(False)
-        self._update_status("Produktiv-Sniffer " + ("an" if on else "aus"))
+        self._update_status("Production sniffer " + ("on" if on else "off"))
 
     def _on_rx_frames(self, frames: list) -> None:
-        # Produktiv-Firmware filtert nicht: nur Frames passend zu CAN-ID/Art behalten (Puffer ist begrenzt).
+        # Production firmware does not filter: keep only frames matching CAN ID/type (buffer is limited).
         if self._fw == FW_PROD:
             ids, _err = self._current_filters()
             msg_type = self._type_combo.currentData()
             frames = [f for f in frames if _frame_matches(f, ids, msg_type)]
-        # Nur sammeln; eingefuegt wird im 100-ms-Takt in _flush().
+        # Only collect; inserted every 100 ms in _flush().
         self._pending.extend(frames)
         while len(self._pending) > MAX_ROWS:
             self._pending.popleft()
@@ -495,7 +495,7 @@ class LiveTab(QWidget):
             self._latest_dirty = True
             if self._autoscroll.isChecked():
                 self._table.scrollToBottom()
-        # Im Modus "letzter Wert" ist die Filterung zeitabhaengig: gelegentlich neu rechnen.
+        # In "last value" mode filtering is time-dependent: recalculate now and then.
         if (
             self._proxy.latest_only
             and self._latest_dirty
@@ -507,7 +507,7 @@ class LiveTab(QWidget):
 
     def _toggle_pause(self) -> None:
         self._paused = not self._paused
-        self._pause_btn.setText("Weiter" if self._paused else "Pause")
+        self._pause_btn.setText("Resume" if self._paused else "Pause")
         if not self._paused:
             self._flush()
         self._update_status()
@@ -527,7 +527,7 @@ class LiveTab(QWidget):
         ids, err = self._current_filters()
         if err:
             self._update_status(err)
-            ids = []  # ungueltige Eingabe: ignorieren statt leere Tabelle
+            ids = []  # invalid input: ignore instead of empty table
         self._proxy.set_filters(
             ids,
             self._type_combo.currentData(),
@@ -549,19 +549,19 @@ class LiveTab(QWidget):
     def _send_filter(self) -> None:
         ids, types = self._filter_lists()
         self._bridge.send_sniff(self._sniff_check.isChecked(), ids, types)
-        self._update_status("Sniffer-Filter gesendet")
+        self._update_status("Sniffer filter sent")
 
     def _on_sniff_toggled(self, checked: bool) -> None:
         ids, types = self._filter_lists()
         self._bridge.send_sniff(checked, ids, types)
-        self._update_status("Sniffer " + ("an" if checked else "aus"))
+        self._update_status("Sniffer " + ("on" if checked else "off"))
 
-    # --- Export / Offline-Log ----------------------------------------
+    # --- Export / offline log ----------------------------------------
     def load_rows(self, rows: list[dict]) -> None:
         self._pending.clear()
         self._model.load_rows(rows)
         self._latest_dirty = True
-        self._update_status("Offline-Log geladen")
+        self._update_status("Offline log loaded")
 
     def rows(self) -> list[dict]:
         return self._model.rows()

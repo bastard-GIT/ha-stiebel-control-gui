@@ -1,8 +1,8 @@
-"""Tests fuer die Firmware-Sperre der Tabs Abfrage/Scanner, Status-Tab und Statuszeile.
+"""Tests for the firmware lock of the Query/Scanner tabs, the status tab and the status bar.
 
-Fake-Bridge mit denselben Signalen wie MqttBridge; Qt laeuft offscreen.
+Fake bridge with the same signals as MqttBridge; Qt runs offscreen.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_tab_lock.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_tab_lock.py -q
 """
 
 import os
@@ -25,8 +25,8 @@ import tab_scanner  # noqa: E402
 import tab_status  # noqa: E402
 from elster import ElsterDb  # noqa: E402
 
-PROD_TEXT = "Nur mit Debug-Firmware moeglich: die Produktiv-Firmware beantwortet keine Abfragen."
-UNKNOWN_TEXT = "Warte auf Status der Firmware..."
+PROD_TEXT = "Only possible with debug firmware: the production firmware does not answer queries."
+UNKNOWN_TEXT = "Waiting for firmware status..."
 
 
 class FakeBridge(QObject):
@@ -87,7 +87,7 @@ def _assert_query_open(tab):
 
 
 def _assert_query_open_prod(tab):
-    # Produktiv: Format bleibt gesperrt (raw/read kennt kein kurz/lang), Rest offen
+    # Production: format stays locked (raw/read has no short/long), rest open
     assert all(w.isEnabled() for w in _query_controls(tab) if w is not tab._format_combo)
     assert not tab._format_combo.isEnabled()
     assert tab._fw_label.isHidden()
@@ -104,7 +104,7 @@ def _assert_scanner_open(tab):
     assert tab._fw_label.isHidden()
 
 
-# ---------------------------------------------------------------- Tab Abfrage
+# ---------------------------------------------------------------- Query tab
 
 def test_query_locked_when_unknown(qapp, db):
     fake = FakeBridge()
@@ -136,7 +136,7 @@ def test_query_stays_open_from_debug_to_prod_and_locks_on_unknown(qapp, db):
     _assert_query_locked(tab, UNKNOWN_TEXT)
 
 
-# ---------------------------------------------------------------- Tab Scanner
+# ---------------------------------------------------------------- Scanner tab
 
 def test_scanner_locked_when_unknown(qapp, db):
     fake = FakeBridge()
@@ -148,7 +148,7 @@ def test_scanner_open_when_prod_without_format_and_delay(qapp, db):
     fake = FakeBridge()
     tab = tab_scanner.ScannerTab(db, fake)
     fake.firmware_kind.emit("prod")
-    # Produktiv: Start und Eingaben offen, Format und Pause gesperrt (Tooltip erklaert es)
+    # Production: start and inputs open, format and pause locked (tooltip explains it)
     assert all(w.isEnabled() for w in _scanner_controls(tab) if w not in (tab._format, tab._delay))
     assert not tab._format.isEnabled()
     assert not tab._delay.isEnabled()
@@ -176,8 +176,8 @@ def test_scanner_stop_stays_usable_while_scanning(qapp, db):
     assert not tab._start_btn.isEnabled()
     assert tab._stop_btn.isEnabled()
     tab._on_stop()
-    assert tab._start_btn.isEnabled()  # prod: Start wieder offen
-    assert not tab._format.isEnabled()  # prod: Format bleibt gesperrt
+    assert tab._start_btn.isEnabled()  # prod: start open again
+    assert not tab._format.isEnabled()  # prod: format stays locked
     assert not tab._stop_btn.isEnabled()
 
 
@@ -191,12 +191,12 @@ def test_scanner_reopens_after_scan_when_debug(qapp, db):
     assert not tab._stop_btn.isEnabled()
 
 
-# ---------------------------------------------------------------- Status-Tab
+# ---------------------------------------------------------------- Status tab
 
 @pytest.mark.parametrize("kind, text", [
     ("debug", "Debug"),
-    ("prod", "Produktiv"),
-    ("unknown", "unbekannt"),
+    ("prod", "Production"),
+    ("unknown", "unknown"),
 ])
 def test_status_tab_firmware_label(qapp, kind, text):
     fake = FakeBridge()
@@ -205,7 +205,7 @@ def test_status_tab_firmware_label(qapp, kind, text):
     assert tab._lbl_fw.text() == text
 
 
-# ---------------------------------------------------------------- Statuszeile
+# ---------------------------------------------------------------- Status bar
 
 def test_status_bar_shows_firmware(qapp, db):
     fake = FakeBridge()
@@ -215,6 +215,6 @@ def test_status_bar_shows_firmware(qapp, db):
     fake.firmware_kind.emit("debug")
     assert win._lbl_esp.text() == "ESP: online (Debug)"
     fake.firmware_kind.emit("prod")
-    assert win._lbl_esp.text() == "ESP: online (Produktiv)"
+    assert win._lbl_esp.text() == "ESP: online (Production)"
     fake.firmware_kind.emit("unknown")
     assert win._lbl_esp.text() == "ESP: online"

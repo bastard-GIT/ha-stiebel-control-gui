@@ -1,20 +1,20 @@
-"""MQTT-Zugangsdaten aus der secrets.yaml des Mk1-Projekts (kein Qt, kein paho).
+"""MQTT credentials from the secrets.yaml of the Mk1 project (no Qt, no paho).
 
-Quelle: secrets.yaml im Repo-Wurzelordner oder $STIEBEL_SECRETS (Schluessel mqtt_server, mqtt_port, mqtt_username,
-mqtt_password). Werte werden nie geloggt oder ausgegeben.
+Source: secrets.yaml in the repo root folder or $STIEBEL_SECRETS (keys mqtt_server, mqtt_port, mqtt_username,
+mqtt_password). Values are never logged or printed.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-# Umgebungsvariable STIEBEL_SECRETS ueberschreibt, Standard: secrets.yaml im Repo-Wurzelordner (nicht im Repo)
+# Environment variable STIEBEL_SECRETS overrides; default: secrets.yaml in the repo root folder (not in the repo)
 SECRETS_PATH = Path(os.environ.get("STIEBEL_SECRETS") or Path(__file__).resolve().parents[1] / "secrets.yaml")
 SECRET_KEYS = ("mqtt_server", "mqtt_port", "mqtt_username", "mqtt_password")
 
 
 def parse_secrets(text: str) -> dict[str, str]:
-    """Einfacher Zeilen-Parser fuer `key: "value"` und `key: value`. Leere Zeilen und # ignorieren."""
+    """Simple line parser for `key: "value"` and `key: value`. Ignore empty lines and #."""
     out: dict[str, str] = {}
     for raw in text.splitlines():
         line = raw.strip()
@@ -31,7 +31,7 @@ def parse_secrets(text: str) -> dict[str, str]:
 
 
 def load_mqtt_settings(path: str | Path | None = None) -> tuple[str, int, str, str] | None:
-    """(host, port, user, password) aus der secrets.yaml, None wenn Datei/Schluessel fehlen."""
+    """(host, port, user, password) from the secrets.yaml, None if file or key is missing."""
     try:
         text = Path(path or SECRETS_PATH).read_text(encoding="utf-8")
     except OSError:

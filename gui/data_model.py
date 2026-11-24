@@ -1,8 +1,8 @@
-"""Messdaten-Modell fuer die Auswerte-GUI (kein Qt).
+"""Measurement data model for the evaluation GUI (no Qt).
 
-Quellen: auto_*_state.json (volle Rohwerte, Min/Max), *_bekannt.csv / *_unbekannt.csv
-(zusammengefasste Tabellen, nur letzter Rohwert) und optional auto_*_rx.jsonl (Antwortzeiten).
-State-Daten haben Vorrang vor CSV-Daten.
+Sources: auto_*_state.json (full raw values, min/max), *_bekannt.csv / *_unbekannt.csv
+(summarised tables, last raw value only) and optionally auto_*_rx.jsonl (response times).
+State data takes precedence over CSV data.
 """
 from __future__ import annotations
 
@@ -35,12 +35,12 @@ def _num(value) -> int:
 
 @dataclass
 class Cell:
-    """Antwort eines Members auf einen Index."""
+    """Answer of a member to an index."""
     status: str = "none"          # ok | unsupported | none
-    raws: list[int] = field(default_factory=list)   # alle ok-Rohwerte, chronologisch
+    raws: list[int] = field(default_factory=list)   # all ok raw values, chronological
     min_raw: int | None = None
     max_raw: int | None = None
-    mm_text: str = ""             # nur CSV: Min/Max-Text, wenn keine Rohwerte vorliegen
+    mm_text: str = ""             # CSV only: min/max text if no raw values are present
     prio: int = PRIO_CSV
 
     @property
@@ -62,7 +62,7 @@ class Measurements:
 
     @property
     def indices(self) -> list[int]:
-        """Nur Indizes, auf die mindestens ein Member mit einem Wert geantwortet hat."""
+        """Only indices to which at least one member answered with a value."""
         return sorted(i for i, cells in self.by_index.items()
                       if any(c.status == "ok" for c in cells.values()))
 
@@ -81,7 +81,7 @@ class Measurements:
         if old is None or cell.prio > old.prio:
             row[member] = cell
         elif cell.prio == old.prio:
-            # gleiche Prioritaet: Daten zusammenfuehren
+            # same priority: merge data
             old.raws += cell.raws
             if cell.status == "ok":
                 old.status = "ok"
@@ -96,7 +96,7 @@ class Measurements:
 
     # ---- Laden ----
     def load_state(self, path: str) -> int:
-        if os.path.basename(path) in self.sources:   # gleiche Datei nicht doppelt zaehlen
+        if os.path.basename(path) in self.sources:   # do not count the same file twice
             return 0
         with open(path, encoding="utf-8") as fh:
             st = json.load(fh)

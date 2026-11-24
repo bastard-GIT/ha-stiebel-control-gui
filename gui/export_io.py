@@ -1,7 +1,7 @@
-"""Export/Import fuer mk1-debug (kein Qt).
+"""Export/import for mk1-debug (no Qt).
 
-- CSV: Semikolon-Trennzeichen, UTF-8 mit BOM (Excel-kompatibel).
-- JSONL: gleiches Zeilenformat wie die MQTT-rx-Payload (Abschnitt 1 INTERFACES.md).
+- CSV: semicolon delimiter, UTF-8 with BOM (Excel-compatible).
+- JSONL: same line format as the MQTT rx payload (section 1 INTERFACES.md).
 """
 
 import csv
@@ -26,24 +26,24 @@ FRAME_CSV_HEADER = [
 
 SCAN_CSV_HEADER = ["index", "switch", "name", "raw", "status", "wert"]
 
-_CSV_ENCODING = "utf-8-sig"  # UTF-8 mit BOM
+_CSV_ENCODING = "utf-8-sig"  # UTF-8 with BOM
 _JSONL_ENCODING = "utf-8"
 
 
 def _hex_id(value, width):
-    """int -> "0x%0<width>x" (Kleinbuchstaben)."""
+    """int -> "0x%0<width>x" (lowercase)."""
     return "0x%0*x" % (width, int(value))
 
 
 def _to_int(value):
-    """int oder String ("0x180", "12") -> int."""
+    """int or str ("0x180", "12") -> int."""
     if isinstance(value, str):
         return int(value, 0)
     return int(value)
 
 
 def _ts_or_none(value):
-    """Optionaler Zeitstempel (Unix-Sekunden) -> float oder None bei fehlend/ungueltig."""
+    """Optional timestamp (Unix seconds) -> float, or None if missing/invalid."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     value = float(value)
@@ -51,7 +51,7 @@ def _ts_or_none(value):
 
 
 def _decode_frame(can_id, data, db):
-    """Liefert (absender, empfaenger, msg_type, index, switch, name) oder 6x ""."""
+    """Returns (sender, receiver, msg_type, index, switch, name) or 6x ""."""
     if db is None:
         return "", "", "", "", "", ""
     from elster import parse_frame, switch_label  # lazy: elster.py liegt parallel in gui/
@@ -66,7 +66,7 @@ def _decode_frame(can_id, data, db):
         parsed["msg_type"],
         _hex_id(index, 4),
         switch_label(parsed.get("switch")),
-        # Systemnachrichten (Art 6/7) sind keine Indizes: wie im Live-Tab als SYSTEM_0x.. benennen
+        # System messages (type 6/7) are not indices: name them like in the live tab as SYSTEM_0x..
         f"SYSTEM_0x{index:02X}" if parsed.get("system") else db.signal_name(index),
     )
 
@@ -74,9 +74,9 @@ def _decode_frame(can_id, data, db):
 def save_frames_csv(path, rows, db=None):
     """Schreibt Frames als CSV.
 
-    rows: Iterable von {"t":int,"id":int,"data":bytes,"tx":bool}, optional
-          "ts" (float, Unix-Sekunden). Ohne ts bleiben zeit_unix/zeit_lokal leer.
-    db: optional ElsterDb. Ohne db bleiben die Dekodier-Spalten leer.
+    rows: iterable of {"t":int,"id":int,"data":bytes,"tx":bool}, optional
+          "ts" (float, Unix seconds). Without ts, zeit_unix/zeit_lokal stay empty.
+    db: optional ElsterDb. Without db, the decode columns stay empty.
     """
     with open(path, "w", encoding=_CSV_ENCODING, newline="") as fh:
         writer = csv.writer(fh, delimiter=";", lineterminator="\r\n")
@@ -106,10 +106,10 @@ def save_frames_csv(path, rows, db=None):
 
 
 def save_frames_jsonl(path, rows):
-    """Schreibt Frames als JSONL, eine Zeile je Frame.
+    """Writes frames as JSONL, one line per frame.
 
-    Zeile: {"t":123,"id":"0x180","d":"hex","tx":false}
-    Optional: "ts" (direkt nach "t", round(ts,3)) und "ts_src" (am Ende).
+    Line: {"t":123,"id":"0x180","d":"hex","tx":false}
+    Optional: "ts" (directly after "t", round(ts,3)) and "ts_src" (at the end).
     """
     with open(path, "w", encoding=_JSONL_ENCODING, newline="\n") as fh:
         for row in rows:
@@ -126,12 +126,12 @@ def save_frames_jsonl(path, rows):
 
 
 def load_frames_jsonl(path):
-    """Liest JSONL und liefert Liste von row-dicts.
+    """Reads JSONL and returns a list of row dicts.
 
-    Fehlerhafte Zeilen (kein JSON, fehlende Felder, falsche Typen,
-    ungueltiger Hex) werden ubersprungen. Leere Zeilen ebenfalls.
-    Optionales "ts"/"ts_src": ungueltige oder fehlende Werte werden weggelassen,
-    die Zeile bleibt gueltig (alte Dateien ohne ts).
+    Malformed lines (no JSON, missing fields, wrong types,
+    invalid hex) are skipped. Empty lines too.
+    Optional "ts"/"ts_src": invalid or missing values are omitted,
+    the line stays valid (old files without ts).
     """
     rows = []
     with open(path, "r", encoding=_JSONL_ENCODING) as fh:
@@ -165,14 +165,14 @@ def load_frames_jsonl(path):
 
 
 def save_scan_csv(path, items, db):
-    """Schreibt Scan-Ergebnisse als CSV.
+    """Writes scan results as CSV.
 
-    items: Liste von {"index": int|str, "raw": int|str, "status": str,
-                      "switch": int|str (optional, Standard 0xFA)}
-           (wie scan/result, Werte als int oder "0x..."-String).
-    db: ElsterDb fuer name und Typ-Dekodierung (wert).
-    Spalten: index;switch;name;raw;status;wert. switch: "" bei 0xFA, sonst min/max/f7.
-    wert nur bei status "ok".
+    items: list of {"index": int|str, "raw": int|str, "status": str,
+                    "switch": int|str (optional, default 0xFA)}
+           (like scan/result, values as int or "0x..." string).
+    db: ElsterDb for name and type decoding (wert).
+    Columns: index;switch;name;raw;status;wert. switch: "" for 0xFA, otherwise min/max/f7.
+    wert only for status "ok".
     """
     from elster import decode_value, switch_label  # lazy
 

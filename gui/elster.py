@@ -1,7 +1,7 @@
-"""Elster-Protokoll fuer mk1-debug (kein Qt, kein paho).
+"""Elster protocol for mk1-debug (no Qt, no paho).
 
-Quelle der Daten: Repo bastard-GIT/elster_reference (ElsterTable.json, siehe default_reference_path).
-Dekodierregeln wie in KElsterTable.cpp (SetValueType, SetDoubleType).
+Data source: repo bastard-GIT/elster_reference (ElsterTable.json, see default_reference_path).
+Decoding rules as in KElsterTable.cpp (SetValueType, SetDoubleType).
 """
 from __future__ import annotations
 
@@ -12,15 +12,15 @@ from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 
-NOT_SUPPORTED_RAW = 0x8000  # "kein Wert" -> "-255" (ausser et_double_val/et_triple_val)
+NOT_SUPPORTED_RAW = 0x8000  # "no value" -> "-255" (except et_double_val/et_triple_val)
 
-SWITCH_LONG = (0xF7, 0xF8, 0xF9, 0xFA)   # data[2] bei Langlayout (INTERFACES 8.1)
-REQUEST_SWITCHES = (0xFA, 0xF8, 0xF9)    # gueltige Switch-Werte im Request
+SWITCH_LONG = (0xF7, 0xF8, 0xF9, 0xFA)   # data[2] in long layout (INTERFACES 8.1)
+REQUEST_SWITCHES = (0xFA, 0xF8, 0xF9)    # valid switch values in request
 SWITCH_LABELS = {0xF7: "f7", 0xF8: "min", 0xF9: "max"}
 
 def default_reference_path() -> Path:
-    """Pfad zur ElsterTable.json: Umgebungsvariable ELSTER_REFERENCE_JSON, sonst Repo elster_reference
-    neben diesem Repo (../elster_reference)."""
+    """Path to ElsterTable.json: environment variable ELSTER_REFERENCE_JSON, else repo elster_reference
+    next to this repo (../elster_reference)."""
     env = os.environ.get("ELSTER_REFERENCE_JSON")
     if env:
         return Path(env)
@@ -34,10 +34,10 @@ def default_reference_path() -> Path:
 
 DEFAULT_JSON = default_reference_path()
 
-# Bitfelder: Index -> [{"bit": n, "name": "...", "confirmed": bool}]. Eingebaute Vorgabe (Nutzerwissen
-# aus altem ESPHome-Code); ein Signal der Referenz-JSON mit Feld "bits" ueberschreibt sie.
-# BETRIEBS_STATUS (am Display geprueft 2026-10-21): Bit 0 Verdichter, Bit 6 Speicherladepumpe, Bit 14 Warmwasser (Wasserhahn).
-# Warmwasser 0x4041, Heizen 0x0041, Notlauf (Zusatzheizung, Verdichter aus) 0x1040. Das Heizung-Symbol hat hier kein eigenes Bit.
+# Bit fields: index -> [{"bit": n, "name": "...", "confirmed": bool}]. Built-in default (user knowledge
+# from old ESPHome code); a signal of the reference JSON with field "bits" overrides it.
+# BETRIEBS_STATUS (checked on display 2026-10-21): bit 0 compressor, bit 6 storage charge pump, bit 14 hot water (tap).
+# Hot water 0x4041, heating 0x0041, emergency operation (auxiliary heater, compressor off) 0x1040. The heating symbol has no own bit here.
 BUILTIN_BITS = {
     0x0176: [
         {"bit": 0, "name": "VERDICHTER", "confirmed": True},
@@ -45,8 +45,8 @@ BUILTIN_BITS = {
         {"bit": 12, "name": "ZUSATZHEIZUNG", "confirmed": True},
         {"bit": 14, "name": "WARMWASSER", "confirmed": True},
     ],
-    # BETRIEBS_STATUS_WPLA (0x4eef, Owner 0x480). Quelle kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml,
-    # gemessen 0x0051 Heizen 2026-10-20. Bits 0, 4, 6 bestaetigt, uebrige noch nicht am Display geprueft.
+    # BETRIEBS_STATUS_WPLA (0x4eef, owner 0x480). Source kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml,
+    # measured 0x0051 heating 2026-10-20. Bits 0, 4, 6 confirmed, others not yet checked on display.
     0x4EEF: [
         {"bit": 0, "name": "HEIZKREISPUMPE_1", "confirmed": True},
         {"bit": 1, "name": "HEIZKREISPUMPE_2", "confirmed": False},
@@ -101,7 +101,7 @@ class ElsterDb:
         self._signal_by_index: dict[int, dict] = {}
         self._bits: dict[int, list[dict]] = {k: list(v) for k, v in BUILTIN_BITS.items()}
         for s in self.signals:
-            if s.get("sentinel"):  # INDEX_NOT_FOUND ist kein echtes Signal
+            if s.get("sentinel"):  # INDEX_NOT_FOUND is not a real signal
                 continue
             self._signal_by_index.setdefault(_hex(s["index"]), s)
             if s.get("bits"):
@@ -118,11 +118,11 @@ class ElsterDb:
         return self._signal_by_index.get(index)
 
     def bits_for(self, index: int) -> list[dict] | None:
-        """Bit-Definitionen des Index (Referenz-Feld "bits" oder eingebaute Vorgabe), sonst None."""
+        """Bit definitions of the index (reference field "bits" or built-in default), else None."""
         return self._bits.get(index)
 
     def decode(self, index: int, raw: int, type_name: str | None = None) -> str:
-        """Rohwert dekodieren: Bitfeld-Text, wenn der Index Bits hat, sonst nach Typ."""
+        """Decode raw value: bit field text if the index has bits, else by type."""
         bits = self.bits_for(index)
         if bits:
             return decode_bits(raw, bits)
@@ -147,13 +147,13 @@ class ElsterDb:
 
 
 def parse_frame(can_id: int, data: bytes) -> dict | None:
-    """7-Byte-Antwort zerlegen (Abschnitt 2 / ElsterTable.README 'dekodieren')."""
+    """Split 7-byte response (section 2 / ElsterTable.README 'dekodieren')."""
     if len(data) < 7:
         return None
     d = bytes(data)
     msg_type = d[0] & 0x0F
     receiver = ((d[0] & 0xF0) << 3) | d[1]
-    system = msg_type in (6, 7)  # Systemnachricht: immer Kurzlayout
+    system = msg_type in (6, 7)  # system message: always short layout
     switch = None
     if not system and d[2] in SWITCH_LONG:
         switch = d[2]
@@ -175,7 +175,7 @@ def parse_frame(can_id: int, data: bytes) -> dict | None:
 
 
 def switch_label(switch: int | None) -> str:
-    """Anzeige-Kurzform des Switch-Bytes: None/0xFA -> "", 0xF8 -> "min", 0xF9 -> "max", 0xF7 -> "f7"."""
+    """Short display form of the switch byte: None/0xFA -> "", 0xF8 -> "min", 0xF9 -> "max", 0xF7 -> "f7"."""
     if switch is None or switch == 0xFA:
         return ""
     return SWITCH_LABELS.get(switch, f"0x{switch:02x}")
@@ -183,14 +183,14 @@ def switch_label(switch: int | None) -> str:
 
 @lru_cache(maxsize=1)
 def _lookup_tables() -> tuple[tuple[dict, ...], tuple[dict, ...]]:
-    """betriebsart_list und error_list aus der Standard-Tabelle (fuer decode_value)."""
+    """betriebsart_list and error_list from the standard table (for decode_value)."""
     with open(DEFAULT_JSON, encoding="utf-8") as f:
         table = json.load(f)
     return tuple(table.get("betriebsart_list", [])), tuple(table.get("error_list", []))
 
 
 def decode_value(type_name: str, raw: int) -> str:
-    """Rohwert (uint16) nach Typregel (KElsterTable.cpp) als Text."""
+    """Raw value (uint16) as text per type rule (KElsterTable.cpp)."""
     if type_name == "et_double_val":
         return f"{raw:.3f}"
     if type_name == "et_triple_val":
@@ -213,7 +213,7 @@ def decode_value(type_name: str, raw: int) -> str:
     if type_name == "et_byte":
         return str(lo - 256 if lo & 0x80 else lo)
     if type_name in ("et_bool", "et_little_bool"):
-        # Beide Byte-Reihenfolgen gelten als on (wie upstream 2.3.0/2.4.0 und Produktiv-Firmware)
+        # Both byte orders count as on (like upstream 2.3.0/2.4.0 and production firmware)
         return {0x0001: "on", 0x0100: "on", 0x0000: "off"}.get(raw, "?")
     if type_name == "et_little_endian":
         return str(hi + 256 * lo)
@@ -241,52 +241,52 @@ def decode_value(type_name: str, raw: int) -> str:
             if _hex(e["index"]) == raw:
                 return e["name"]
         return f"ERR {raw}"
-    # et_default und unbekannte Typen
+    # et_default and unknown types
     return str(s16)
 
 
 def set_bit_names(raw: int, bits: list[dict]) -> list[tuple[int, str]]:
-    """Gesetzte Bits als [(bit, name)], aufsteigend. Bits ohne Definition heissen "b<n>"."""
+    """Set bits as [(bit, name)], ascending. Bits without definition are named "b<n>"."""
     names = {int(b["bit"]): b["name"] for b in bits}
     raw &= 0xFFFF
     return [(n, names.get(n, f"b{n}")) for n in range(16) if raw & (1 << n)]
 
 
 def decode_bits(raw: int, bits: list[dict]) -> str:
-    """Bitfeld als Text: "0x0041: VERDICHTER, SPEICHERLADEPUMPE". 0x8000 = nicht unterstuetzt."""
+    """Bit field as text: "0x0041: VERDICHTER, SPEICHERLADEPUMPE". 0x8000 = not supported."""
     if raw == NOT_SUPPORTED_RAW:
         return "-255"
     on = ", ".join(name for _, name in set_bit_names(raw, bits))
     return f"0x{raw & 0xFFFF:04X}: {on}" if on else f"0x{raw & 0xFFFF:04X}: -"
 
 
-OWN_CAN_ID = 0x680  # eigene ID (ESPCLIENT), als Lese-Ziel verboten
+OWN_CAN_ID = 0x680  # own ID (ESPCLIENT), forbidden as read target
 
 
 def build_read_request(member_can_id: int, index: int,
                        db: ElsterDb | None = None, fmt: str = "auto",
                        switch: int = 0xFA) -> tuple[int, bytes]:
-    """Lese-Request nach INTERFACES.md 7.1/8.1: (CAN-ID 0x680, 7 Bytes).
+    """Read request per INTERFACES.md 7.1/8.1: (CAN ID 0x680, 7 bytes).
 
-    d0 = ((id >> 3) & 0xF0) | 0x01, d1 = id & 0x7F (generische Formel fuer jede ID).
-    fmt: "auto" (kurz wenn index <= 0xFF, nicht in SWITCH_LONG, switch == 0xFA),
-    "short" (nur index <= 0xFF; Indizes in SWITCH_LONG und switch != 0xFA werden lang
-    gesendet), "long" (immer [d0, d1, switch, hi, lo, 0, 0]).
-    switch: 0xFA (Standard), 0xF8 (Min), 0xF9 (Max); sonst ValueError.
-    db ist nur aus Kompatibilitaetsgruenden da und wird ignoriert.
+    d0 = ((id >> 3) & 0xF0) | 0x01, d1 = id & 0x7F (generic formula for any ID).
+    fmt: "auto" (short if index <= 0xFF, not in SWITCH_LONG, switch == 0xFA),
+    "short" (only index <= 0xFF; indices in SWITCH_LONG and switch != 0xFA are sent long),
+    "long" (always [d0, d1, switch, hi, lo, 0, 0]).
+    switch: 0xFA (default), 0xF8 (Min), 0xF9 (Max); otherwise ValueError.
+    db is only present for compatibility and is ignored.
     """
     if not 0 <= member_can_id <= 0x7FF:
-        raise ValueError(f"CAN-ID ausserhalb 11 Bit: 0x{member_can_id:x}")
+        raise ValueError(f"CAN ID outside 11 bit: 0x{member_can_id:x}")
     if member_can_id == OWN_CAN_ID:
-        raise ValueError("Ziel 0x680 (eigene ID) ist nicht erlaubt")
+        raise ValueError("Target 0x680 (own ID) is not allowed")
     if not 0 <= index <= 0xFFFF:
-        raise ValueError(f"Index ausserhalb 16 Bit: {index}")
+        raise ValueError(f"Index outside 16 bit: {index}")
     if fmt not in ("auto", "short", "long"):
-        raise ValueError(f"unbekanntes Format: {fmt!r}")
+        raise ValueError(f"unknown format: {fmt!r}")
     if fmt == "short" and index > 0xFF:
-        raise ValueError(f"Kurzformat nur fuer Index <= 0xFF, war 0x{index:04x}")
+        raise ValueError(f"short format only for index <= 0xFF, was 0x{index:04x}")
     if switch not in REQUEST_SWITCHES:
-        raise ValueError(f"ungueltiger Switch: {switch!r} (erlaubt: 0xFA, 0xF8, 0xF9)")
+        raise ValueError(f"invalid switch: {switch!r} (allowed: 0xFA, 0xF8, 0xF9)")
 
     d0 = ((member_can_id >> 3) & 0xF0) | 0x01
     d1 = member_can_id & 0x7F
@@ -301,31 +301,31 @@ def build_read_request(member_can_id: int, index: int,
 
 @lru_cache(maxsize=1)
 def _type_table() -> dict[str, dict]:
-    """types aus der Standard-Tabelle, Name -> Eintrag."""
+    """types from the standard table, name -> entry."""
     with open(DEFAULT_JSON, encoding="utf-8") as f:
         table = json.load(f)
     return {t["name"]: t for t in table.get("types", [])}
 
 
 def is_writable(type_name: str) -> bool:
-    """types[].writable der Standardreferenz; unbekannter Typ -> False."""
+    """types[].writable of the standard reference; unknown type -> False."""
     t = _type_table().get(type_name)
     return bool(t and t.get("writable"))
 
 
 def _parse_int(s: str) -> int:
     if not re.fullmatch(r"[+-]?\d+", s):
-        raise ValueError(f"keine Ganzzahl: {s!r}")
+        raise ValueError(f"not an integer: {s!r}")
     return int(s)
 
 
 def _parse_scaled(s: str, factor: int) -> int:
-    """Dezimalzahl (Komma oder Punkt) * factor, abgeschnitten (gegen Null), als uint16."""
+    """Decimal number (comma or point) * factor, truncated (toward zero), as uint16."""
     if not re.fullmatch(r"[+-]?(\d+([.,]\d*)?|[.,]\d+)", s):
-        raise ValueError(f"keine Dezimalzahl: {s!r}")
+        raise ValueError(f"not a decimal number: {s!r}")
     scaled = int(Decimal(s.replace(",", ".")) * factor)
     if not -32767 <= scaled <= 32767:
-        raise ValueError(f"Wert ausserhalb +-32767 nach Skalierung: {s!r}")
+        raise ValueError(f"value outside +-32767 after scaling: {s!r}")
     return scaled & 0xFFFF
 
 
@@ -335,22 +335,22 @@ def _parse_onoff(s: str, on_raw: int) -> int:
         return on_raw
     if low == "off":
         return 0
-    raise ValueError(f"erwartet 'on' oder 'off': {s!r}")
+    raise ValueError(f"expected 'on' or 'off': {s!r}")
 
 
 def _parse_hm(h: str, m: str) -> tuple[int, int]:
     hour, minute = int(h), int(m)
     if not (hour < 24 and minute < 60):
-        raise ValueError(f"Uhrzeit ausserhalb 0-23:0-59: {h}:{m}")
+        raise ValueError(f"time outside 0-23:0-59: {h}:{m}")
     return hour, minute
 
 
 def _encode_text(type_name: str, s: str) -> int:
-    """Text eines beschreibbaren Typs nach uint16 (Umkehrung von decode_value)."""
+    """Text of a writable type to uint16 (inverse of decode_value)."""
     if type_name == "et_default":
         n = _parse_int(s)
         if not -32767 <= n <= 65535:
-            raise ValueError(f"ausserhalb -32767..65535: {s!r}")
+            raise ValueError(f"outside -32767..65535: {s!r}")
         return n & 0xFFFF
     if type_name == "et_dec_val":
         return _parse_scaled(s, 10)
@@ -361,7 +361,7 @@ def _encode_text(type_name: str, s: str) -> int:
     if type_name == "et_byte":
         n = _parse_int(s)
         if not 0 <= n <= 255:
-            raise ValueError(f"ausserhalb 0..255: {s!r}")
+            raise ValueError(f"outside 0..255: {s!r}")
         return n
     if type_name == "et_bool":
         return _parse_onoff(s, 0x0001)
@@ -370,86 +370,86 @@ def _encode_text(type_name: str, s: str) -> int:
     if type_name == "et_little_endian":
         n = _parse_int(s)
         if not 0 <= n <= 0xFFFF:
-            raise ValueError(f"ausserhalb 0..65535: {s!r}")
-        return ((n & 0xFF) << 8) | (n >> 8)  # Bytes tauschen
+            raise ValueError(f"outside 0..65535: {s!r}")
+        return ((n & 0xFF) << 8) | (n >> 8)  # swap bytes
     if type_name == "et_betriebsart":
         if not s:
-            raise ValueError("leerer Betriebsart-Name")
+            raise ValueError("empty operating-mode name")
         needle = s.lower()
         betriebsart, _ = _lookup_tables()
-        for idx in range(len(betriebsart) - 1, -1, -1):  # von hinten nach vorn
+        for idx in range(len(betriebsart) - 1, -1, -1):  # from back to front
             if betriebsart[idx]["name"].lower().startswith(needle):
                 return idx << 8
-        raise ValueError(f"unbekannte Betriebsart: {s!r}")
+        raise ValueError(f"unknown operating mode: {s!r}")
     if type_name == "et_zeit":
         m = re.fullmatch(r"(\d{1,2}):(\d{1,2})", s)
         if not m:
-            raise ValueError(f"erwartet 'H:M': {s!r}")
+            raise ValueError(f"expected 'H:M': {s!r}")
         hour, minute = _parse_hm(m.group(1), m.group(2))
         return (minute << 8) + hour
     if type_name == "et_datum":
         m = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.?", s)
         if not m:
-            raise ValueError(f"erwartet 'D.M.': {s!r}")
+            raise ValueError(f"expected 'D.M.': {s!r}")
         tag, monat = int(m.group(1)), int(m.group(2))
         if not (1 <= tag <= 31 and 1 <= monat <= 12):
-            raise ValueError(f"Datum ausserhalb Tag 1-31 / Monat 1-12: {s!r}")
+            raise ValueError(f"date outside day 1-31 / month 1-12: {s!r}")
         return (tag << 8) + monat
     if type_name == "et_time_domain":
         if not s:
             return 0x8080  # "not used time domain"
         m = re.fullmatch(r"(\d{1,2}):(\d{1,2})-(\d{1,2}):(\d{1,2})", s)
         if not m:
-            raise ValueError(f"erwartet 'H:M-H:M': {s!r}")
+            raise ValueError(f"expected 'H:M-H:M': {s!r}")
         h1, m1 = _parse_hm(m.group(1), m.group(2))
         h2, m2 = _parse_hm(m.group(3), m.group(4))
         if h1 * 60 + m1 >= h2 * 60 + m2:
-            raise ValueError(f"Start muss vor Ende liegen: {s!r}")
+            raise ValueError(f"start must be before end: {s!r}")
         return ((4 * h1 + m1 // 15) << 8) + (4 * h2 + m2 // 15)
-    raise ValueError(f"Typ nicht beschreibbar: {type_name}")
+    raise ValueError(f"type not writable: {type_name}")
 
 
 def encode_value(type_name: str, text: str) -> int:
-    """Text nach Typregel (KElsterTable.cpp / types[].encode) als uint16.
+    """Text to uint16 per type rule (KElsterTable.cpp / types[].encode).
 
-    Text '0x....' ist bei jedem Typ der Rohwert (0..0xFFFF). Ergebnis 0x8000 ist ValueError.
+    Text '0x....' is the raw value for every type (0..0xFFFF). Result 0x8000 is ValueError.
     """
     if type_name not in _type_table():
-        raise ValueError(f"unbekannter Typ: {type_name!r}")
+        raise ValueError(f"unknown type: {type_name!r}")
     s = text.strip()
     if re.fullmatch(r"0[xX][0-9a-fA-F]+", s):
         raw = int(s, 16)
     else:
         if not is_writable(type_name):
-            raise ValueError(f"Typ nicht beschreibbar: {type_name}")
+            raise ValueError(f"type not writable: {type_name}")
         raw = _encode_text(type_name, s)
     if not 0 <= raw <= 0xFFFF:
-        raise ValueError(f"Rohwert ausserhalb 16 Bit: {text!r}")
+        raise ValueError(f"raw value outside 16 bit: {text!r}")
     if raw == NOT_SUPPORTED_RAW:
-        raise ValueError("Rohwert 0x8000 ('kein Wert') ist nicht schreibbar")
+        raise ValueError("raw value 0x8000 ('no value') is not writable")
     return raw
 
 
 def build_write_request(member_can_id: int, index: int, value: int,
                         fmt: str = "auto") -> tuple[int, bytes]:
-    """Schreib-Request: (CAN-ID 0x680, 7 Bytes). Gegenstueck zu build_read_request.
+    """Write request: (CAN ID 0x680, 7 bytes). Counterpart to build_read_request.
 
     d0 = ((id >> 3) & 0xF0) | 0x00, d1 = id & 0x7F.
-    Kurz (fmt "auto"/"short", index <= 0xFF, nicht 0xF7..0xFA): [d0, d1, idx, vh, vl, 0, 0].
-    Lang (fmt "long", index > 0xFF oder 0xF7..0xFA): [d0, d1, 0xFA, ih, il, vh, vl].
+    Short (fmt "auto"/"short", index <= 0xFF, not 0xF7..0xFA): [d0, d1, idx, vh, vl, 0, 0].
+    Long (fmt "long", index > 0xFF or 0xF7..0xFA): [d0, d1, 0xFA, ih, il, vh, vl].
     """
     if not 0 <= member_can_id <= 0x7FF:
-        raise ValueError(f"CAN-ID ausserhalb 11 Bit: 0x{member_can_id:x}")
+        raise ValueError(f"CAN ID outside 11 bit: 0x{member_can_id:x}")
     if member_can_id == OWN_CAN_ID:
-        raise ValueError("Ziel 0x680 (eigene ID) ist nicht erlaubt")
+        raise ValueError("Target 0x680 (own ID) is not allowed")
     if not 0 <= index <= 0xFFFF:
-        raise ValueError(f"Index ausserhalb 16 Bit: {index}")
+        raise ValueError(f"Index outside 16 bit: {index}")
     if not 0 <= value <= 0xFFFF:
-        raise ValueError(f"Wert ausserhalb 16 Bit: {value}")
+        raise ValueError(f"value outside 16 bit: {value}")
     if fmt not in ("auto", "short", "long"):
-        raise ValueError(f"unbekanntes Format: {fmt!r}")
+        raise ValueError(f"unknown format: {fmt!r}")
     if fmt == "short" and index > 0xFF:
-        raise ValueError(f"Kurzformat nur fuer Index <= 0xFF, war 0x{index:04x}")
+        raise ValueError(f"short format only for index <= 0xFF, was 0x{index:04x}")
 
     d0 = ((member_can_id >> 3) & 0xF0) | 0x00
     d1 = member_can_id & 0x7F

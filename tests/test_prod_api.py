@@ -1,9 +1,9 @@
-"""Tests fuer gui/prod_api.py (Bus-Analyse-API der Produktiv-Firmware). Ohne Qt, ohne Broker.
+"""Tests for gui/prod_api.py (bus analysis API of the production firmware). No Qt, no broker.
 
-Prueft Mitglieder-Tabelle, Namen, Switch-Bytes, Topic-Konstanten, Payload-Bau und die Parser
-fuer Scan-Status, Scan-Ergebnisse, Member-Scan und Raw-Antworten.
+Checks member table, names, switch bytes, topic constants, payload building and the parsers
+for scan status, scan results, member scan and raw responses.
 
-Ausfuehren: C:\\Sandbox\\StiebelEltron_WP\\.venv-gui\\Scripts\\python.exe -I -B -m pytest tests\\test_prod_api.py -q
+Run: C:\\Sandbox\\StiebelEltron_WP\\.venv-gui\\Scripts\\python.exe -I -B -m pytest tests\\test_prod_api.py -q
 """
 
 import json
@@ -38,11 +38,11 @@ from prod_api import (  # noqa: E402
 
 
 def _j(obj):
-    """Dict als JSON-Text, wie ihn die Firmware sendet."""
+    """Dict as JSON text, as the firmware sends it."""
     return json.dumps(obj)
 
 
-# ---------------------------------------------------------------- Konstanten und Tabelle
+# ---------------------------------------------------------------- Constants and table
 
 def test_root_and_constants():
     assert PROD_ROOT == "heatingpump"
@@ -150,7 +150,7 @@ def test_switch_suffix_invalid_raises():
         switch_suffix(0xFB)
 
 
-# ---------------------------------------------------------------- Scan-Start
+# ---------------------------------------------------------------- Scan start
 
 def test_scan_start_name_only():
     assert scan_start_payload(0x180) == "KESSEL"
@@ -213,7 +213,7 @@ def test_scan_start_invalid_switch_raises():
         scan_start_payload(0x180, switch=0xFB)
 
 
-# ---------------------------------------------------------------- Member-Scan und Raw-Payloads
+# ---------------------------------------------------------------- Member scan and raw payloads
 
 def test_members_payload_default():
     assert members_payload() == "0x000 0x7ff 0x000b"
@@ -264,7 +264,7 @@ def test_raw_write_payload_invalid_raises(args):
         raw_write_payload(*args)
 
 
-# ---------------------------------------------------------------- Parser: Scan-Status
+# ---------------------------------------------------------------- Parser: scan status
 
 def test_scan_status_valid():
     text = _j({"state": "running", "mode": "members", "member": "", "done": 5, "total": 2048,
@@ -317,7 +317,7 @@ def test_scan_status_non_str_input_is_none():
     assert parse_scan_status(b"{}") is None
 
 
-# ---------------------------------------------------------------- Parser: Scan-Topic und -Ergebnis
+# ---------------------------------------------------------------- Parser: scan topic and result
 
 def test_scan_result_topic_fa():
     assert parse_scan_result_topic("heatingpump/scan/KESSEL/0x0013") == ("KESSEL", 0x13, 0xFA)
@@ -381,7 +381,7 @@ def test_scan_result_broken_json_is_none():
     assert parse_scan_result("{\"name\":") is None
 
 
-# ---------------------------------------------------------------- Parser: Member-Scan
+# ---------------------------------------------------------------- Parser: member scan
 
 def test_member_topic_valid():
     assert parse_member_topic("heatingpump/scan/members/0x180") == 0x180
@@ -413,7 +413,7 @@ def test_member_result_broken_json_is_none():
     assert parse_member_result("nicht json") is None
 
 
-# ---------------------------------------------------------------- Parser: Raw-Antworten
+# ---------------------------------------------------------------- Parser: raw responses
 
 def test_raw_read_ok():
     text = _j({"op": "read", "id": "0x180", "index": "0x0013", "switch": "fa", "raw": "0x0208",

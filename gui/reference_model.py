@@ -1,6 +1,6 @@
-"""Referenz-Arbeitskopie (ElsterTable.json) fuer die Auswerte-GUI (kein Qt).
+"""Reference working copy (ElsterTable.json) for the evaluation GUI (no Qt).
 
-Das Original wird nie geschrieben: save_as verweigert den Pfad der geladenen Datei.
+The original is never written: save_as refuses the path of the loaded file.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class ReferenceModel:
         with open(self.path, encoding="utf-8") as fh:
             self.data: dict = json.load(fh)
         if "signals" not in self.data:
-            raise ReferenceError("Keine Referenz-JSON: Schluessel 'signals' fehlt")
+            raise ReferenceError("No reference JSON: key 'signals' is missing")
         self.dirty = False
 
     # ---- Lesen ----
@@ -68,12 +68,12 @@ class ReferenceModel:
                       owner: int | None, comment: str = "") -> dict:
         name = name.strip()
         if not name:
-            raise ReferenceError("Name fehlt")
+            raise ReferenceError("Name is missing")
         if type_name not in self.types:
-            raise ReferenceError(f"Typ unbekannt: {type_name}")
+            raise ReferenceError(f"Unknown type: {type_name}")
         other = self.by_name(name)
         if other is not None and other["index_int"] != index:
-            raise ReferenceError(f"Name '{name}' gehoert schon zu Index 0x{other['index_int']:04x}")
+            raise ReferenceError(f"Name '{name}' already belongs to index 0x{other['index_int']:04x}")
         owner_hex = f"0x{owner:03x}" if owner is not None else None
         owner_name = self.member_name(owner) if owner is not None else None
         note = f"GUI-Auswertung {date.today().isoformat()}"
@@ -98,15 +98,15 @@ class ReferenceModel:
         for entry in bits:
             bit = entry.get("bit")
             if isinstance(bit, bool) or not isinstance(bit, int) or not 0 <= bit <= 15:
-                raise ReferenceError(f"bit ungueltig: {bit!r} (erlaubt 0..15)")
+                raise ReferenceError(f"invalid bit: {bit!r} (allowed 0..15)")
             name = entry.get("name")
             if not isinstance(name, str) or not name.strip():
-                raise ReferenceError(f"Name fehlt fuer bit {bit}")
+                raise ReferenceError(f"Name missing for bit {bit}")
             name = name.strip()
             if bit in seen_bits:
-                raise ReferenceError(f"bit doppelt: {bit}")
+                raise ReferenceError(f"duplicate bit: {bit}")
             if name in seen_names:
-                raise ReferenceError(f"Name doppelt: {name}")
+                raise ReferenceError(f"duplicate name: {name}")
             seen_bits.add(bit)
             seen_names.add(name)
             item = {"bit": bit, "name": name}
@@ -127,7 +127,7 @@ class ReferenceModel:
     def save_as(self, path: str) -> None:
         target = Path(path)
         if target.exists() and target.resolve() == self.path.resolve():
-            raise ReferenceError("Das geladene Original wird nicht ueberschrieben: anderen Dateinamen waehlen")
+            raise ReferenceError("The loaded original is not overwritten: choose another file name")
         with open(target, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(self.data, fh, ensure_ascii=False, indent=2)
             fh.write("\n")

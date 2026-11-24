@@ -1,18 +1,18 @@
-"""Typ-Heuristik und Auswertung der Automatik-Scans (kein Qt, kein paho).
+"""Type heuristic and evaluation of the automatic scans (no Qt, no paho).
 
-Spezifikation: INTERFACES.md 7.4 und 7.5, plan/mk1-debug-auto-plan.md Schritt 3.
+Specification: INTERFACES.md 7.4 and 7.5, plan/mk1-debug-auto-plan.md step 3.
 CLI: python -I type_guess.py <state.json>
-Ausgabe: <prefix>_analyse.csv und <prefix>_analyse.md (prefix = state-Datei ohne "_state.json").
+Output: <prefix>_analyse.csv and <prefix>_analyse.md (prefix = state file without "_state.json").
 
-Hinweise zur Heuristik:
-- Die Scores sind Plausibilitaets-Werte 0..1, keine Wahrscheinlichkeiten.
-- Rohwert 0x8000 (nicht unterstuetzt) wird vor der Bewertung entfernt.
-- Bei nur 0-Rohwerten werden alle Scores halbiert (0 ist fast ueberall moeglich).
-- Abgleich mit der Uhr (et_zeit/et_datum) ist nicht umgesetzt: guess_types bekommt keine Uhrzeit.
-- et_double_val und et_triple_val werden nicht aus Einzelwerten geschaetzt, sondern als
-  Paar-Hinweis fuer benachbarte Indizes (_H/_L, _WH/_KWH/_MWH) ausgegeben.
-- Min/Max (switch 0xF8/0xF9 aus state["minmax"]) werden nie in die Rohwerte gemischt. Liegen
-  Min und Max im Bereich des Typs, bekommt der Kandidat +0.1 (max 1.0).
+Notes on the heuristic:
+- The scores are plausibility values 0..1, not probabilities.
+- Raw value 0x8000 (not supported) is removed before scoring.
+- If there are only 0 raw values, all scores are halved (0 is possible almost everywhere).
+- Comparison with the clock (et_zeit/et_datum) is not implemented: guess_types gets no time of day.
+- et_double_val and et_triple_val are not estimated from single values, but output as a
+  pair hint for adjacent indices (_H/_L, _WH/_KWH/_MWH).
+- Min/Max (switch 0xF8/0xF9 from state["minmax"]) are never mixed into the raw values. If min
+  and max lie within the range of the type, the candidate gets +0.1 (max 1.0).
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ if str(GUI_DIR) not in sys.path:  # python -I startet ohne Skriptverzeichnis im 
 
 from elster import ElsterDb, NOT_SUPPORTED_RAW, decode_value  # noqa: E402
 
-MKGIT_DEFAULT = Path(os.environ.get("ELSTER_TABLE_H", "ElsterTable.h"))  # optional: ElsterTable.h aus ha-stiebel-control
+MKGIT_DEFAULT = Path(os.environ.get("ELSTER_TABLE_H", "ElsterTable.h"))  # optional: ElsterTable.h from ha-stiebel-control
 _MKGIT_RE = re.compile(
     r'^\s*\{\s*"([^"]+)"\s*,\s*(0[xX][0-9a-fA-F]+)\s*,\s*(et_\w+|0)\s*[,}]'
 )
@@ -56,13 +56,13 @@ def _s16(raw: int) -> int:
 
 
 def _sw(value) -> int:
-    """Switch aus state-Feld ("0xf8", int, fehlt = 0xFA)."""
+    """Switch from state field ("0xf8", int, missing = 0xFA)."""
     return SWITCH_DEFAULT if value is None else _num(value)
 
 
 def _minmax_plausible(name: str, lo: int, hi: int) -> bool | None:
-    """Liegen Min (lo) und Max (hi) im Bereich des Typs? None, wenn der Typ keine Regel hat.
-    Bereiche in Dezimal-Einheiten: et_dec_val /10 in -50..150, et_cent_val /100 in -10..20,
+    """Are min (lo) and max (hi) within the range of the type? None if the type has no rule.
+    Ranges in decimal units: et_dec_val /10 in -50..150, et_cent_val /100 in -10..20,
     et_mil_val /1000 in -5..5."""
     slo, shi = _s16(lo), _s16(hi)
     if name == "et_dec_val":
@@ -93,9 +93,9 @@ def _reference_db() -> ElsterDb:
 
 
 def load_mkgit_table(path: str | Path = MKGIT_DEFAULT) -> dict[int, tuple[str, str]]:
-    """mk-git ElsterTable.h lesen (nur lesen). Index -> (name, type).
+    """Read mk-git ElsterTable.h (read only). Index -> (name, type).
 
-    Typ 0 wird als et_default gefuehrt. Bei doppelten Indizes gewinnt der erste Eintrag.
+    Type 0 is recorded as et_default. For duplicate indices the first entry wins.
     """
     table: dict[int, tuple[str, str]] = {}
     text = Path(path).read_text(encoding="utf-8", errors="replace")
@@ -112,12 +112,12 @@ def load_mkgit_table(path: str | Path = MKGIT_DEFAULT) -> dict[int, tuple[str, s
 
 def guess_types(raws: list[int],
                 minmax: tuple[int, int] | None = None) -> list[tuple[str, float, str]]:
-    """Typ-Kandidaten fuer eine Rohwert-Folge (chronologisch).
+    """Type candidates for a sequence of raw values (chronological).
 
-    minmax: optional (min_raw, max_raw) aus switch 0xF8/0xF9. Passt der Typ zu Min und Max,
-    steigt sein Score um MINMAX_BONUS (max 1.0).
-    Rueckgabe: [(typ, score 0..1, dekodiertes Beispiel)], absteigend nach Score.
-    Leere Liste, wenn nach Entfernen von 0x8000 nichts uebrig bleibt.
+    minmax: optional (min_raw, max_raw) from switch 0xF8/0xF9. If the type fits min and max,
+    its score rises by MINMAX_BONUS (max 1.0).
+    Returns: [(type, score 0..1, decoded example)], sorted by score descending.
+    Empty list if nothing remains after removing 0x8000.
     """
     values = [int(r) & 0xFFFF for r in raws if int(r) & 0xFFFF != NOT_SUPPORTED_RAW]
     if not values:
@@ -138,7 +138,7 @@ def guess_types(raws: list[int],
     if distinct <= {0x0000, 0x0100}:
         add("et_little_bool", 0.9 if 0x0100 in distinct else 0.3)
 
-    # et_dec_val: int16 / 10 im Bereich -50 ... 150 (Temperaturen)
+    # et_dec_val: int16 / 10 in range -50 ... 150 (temperatures)
     if all(-500 <= _s16(v) <= 1500 for v in values):
         add("et_dec_val", 0.8)
     # et_cent_val / et_mil_val: int16 / 100 bzw. / 1000, Plausibilitaet -10 ... 20 bzw. -5 ... 5
@@ -147,16 +147,16 @@ def guess_types(raws: list[int],
     if all(-5000 <= _s16(v) <= 5000 for v in values):
         add("et_mil_val", 0.3)
 
-    # et_byte: High-Byte 0, Wert <= 255
+    # et_byte: high byte 0, value <= 255
     if all(v >> 8 == 0 for v in values):
         add("et_byte", 0.5)
 
-    # et_little_endian: Byte-getauscht kleiner als direkt (0x0100 = 1)
+    # et_little_endian: byte-swapped smaller than direct (0x0100 = 1)
     swapped = [((v & 0xFF) << 8) | (v >> 8) for v in values]
     if all(sw < v for sw, v in zip(swapped, values)):
         add("et_little_endian", 0.6)
 
-    # et_zeit (Stunde:Minute) und et_datum (Tag.Monat) mit Byte-Plausibilitaet
+    # et_zeit (hour:minute) and et_datum (day.month) with byte plausibility
     if all((v >> 8) < 24 and (v & 0xFF) < 60 for v in values):
         add("et_zeit", 0.4)
     if all(1 <= (v >> 8) <= 31 and 1 <= (v & 0xFF) <= 12 for v in values):
@@ -166,7 +166,7 @@ def guess_types(raws: list[int],
     if all((v & 0xFF) == 0 and (v >> 8) < betriebsart_n for v in values):
         add("et_betriebsart", 0.7)
 
-    # Zaehler: nur steigend ueber mehrere Rohwerte (Reihenfolge wie uebergeben)
+    # counter: only rising over several raw values (order as passed)
     if len(values) >= 2:
         non_decreasing = all(b >= a for a, b in zip(values, values[1:]))
         if non_decreasing and values[-1] > values[0]:
@@ -190,10 +190,10 @@ def guess_types(raws: list[int],
 
 def _parse_state(state: dict) -> tuple[dict, dict, dict, dict]:
     """Liefert:
-    raws[(member, index, switch)] -> Liste aus Scan- und Reread-Rohwerten (ok); switch 0xFA = Standard,
+    raws[(member, index, switch)] -> list of scan and reread raw values (ok); switch 0xFA = default,
     stage_items[(member, stage, format, switch)] -> {index: (status, raw)},
     stage_counts[(member, stage, format, switch)] -> {"tasks", "done", "ok", "unsupported", "ohne_antwort"},
-    minmax[(member, index)] -> {"min": raw, "max": raw} aus state["minmax"] (nur status ok).
+    minmax[(member, index)] -> {"min": raw, "max": raw} from state["minmax"] (status ok only).
     """
     raws: dict[tuple[int, int, int], list[int]] = {}
     stage_items: dict[tuple[int, str, str, int], dict[int, tuple[str, int]]] = {}
@@ -283,7 +283,7 @@ def _md_table(headers: list[str], rows: list[list]) -> list[str]:
 
 
 def analyse(state_json_path: str, out_prefix: str) -> tuple[str, str]:
-    """state.json auswerten. Schreibt <prefix>_analyse.csv und <prefix>_analyse.md."""
+    """Evaluate state.json. Writes <prefix>_analyse.csv and <prefix>_analyse.md."""
     state_path = Path(state_json_path)
     with open(state_path, encoding="utf-8") as f:
         state = json.load(f)
@@ -292,10 +292,10 @@ def analyse(state_json_path: str, out_prefix: str) -> tuple[str, str]:
     mkgit = load_mkgit_table()
     mkgit_found = bool(mkgit)
     raws, stage_items, stage_counts, minmax = _parse_state(state)
-    # Tabellenzeilen nur fuer den Standard-Switch; Min/Max stehen in den Spalten min/max
+    # table rows only for the default switch; min/max are in the columns min/max
     base_keys = sorted({(m, i) for (m, i, sw) in raws if sw == SWITCH_DEFAULT})
 
-    # Namen und Typen aus Referenz und mk-git
+    # names and types from reference and mk-git
     ref_name: dict[int, str] = {}
     ref_type: dict[int, str] = {}
     for index in {idx for (_m, idx) in base_keys}:
@@ -316,16 +316,16 @@ def analyse(state_json_path: str, out_prefix: str) -> tuple[str, str]:
         elif name_mk:
             names_for_pairs[(member, index)] = name_mk
         if len(values) >= 2:
-            konstant = "ja" if len(set(values)) == 1 else "nein"
+            konstant = "yes" if len(set(values)) == 1 else "no"
         else:
-            konstant = "unbekannt"
+            konstant = "unknown"
         mm = minmax.get((member, index), {})
         pair = (mm["min"], mm["max"]) if "min" in mm and "max" in mm else None
         cands = guess_types(values, pair)
         conflict = ""
         if type_ref and type_mk and type_ref != type_mk and type_mk != "et_default" \
                 and type_ref != "et_default":
-            conflict = f"ja: ref={type_ref} mkgit={type_mk}"
+            conflict = f"yes: ref={type_ref} mkgit={type_mk}"
         rows.append({
             "member": f"0x{member:03x}",
             "member_name": db.member_name(member),
@@ -350,9 +350,11 @@ def analyse(state_json_path: str, out_prefix: str) -> tuple[str, str]:
     csv_path = f"{out_prefix}_analyse.csv"
     csv_cols = ["member", "member_name", "index", "name_ref", "type_ref", "name_mkgit",
                 "type_mkgit", "raws", "min", "max", "konstant", "kandidaten", "konflikt"]
+    csv_headers = ["member", "member_name", "index", "name_ref", "type_ref", "name_mkgit",
+                   "type_mkgit", "raws", "min", "max", "constant", "candidates", "conflict"]
     with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f, delimiter=";")
-        writer.writerow(csv_cols)
+        writer.writerow(csv_headers)
         for r in rows:
             writer.writerow([r[c] for c in csv_cols])
 
@@ -369,32 +371,32 @@ def _build_markdown(state_path, state, rows, stage_items, stage_counts,
                     names_for_pairs, present, mkgit_found) -> list[str]:
     db = _reference_db()
     md: list[str] = []
-    md.append(f"# Automatik-Analyse: {state_path.name}")
+    md.append(f"# Automatic analysis: {state_path.name}")
     md.append("")
-    md.append(f"Stand: gestartet {state.get('started')}, beendet {state.get('finished')}, "
-              f"Pause {state.get('delay_ms')} ms")
+    md.append(f"Status: started {state.get('started')}, finished {state.get('finished')}, "
+              f"pause {state.get('delay_ms')} ms")
     md.append("")
 
     members = sorted({_num(m) for m in state.get("members", [])}
                      | {r["_member_int"] for r in rows}
                      | {k[0] for k in stage_counts})
-    md.append("## Zusammenfassung")
+    md.append("## Summary")
     md.append("")
-    md.append(f"- Member: {', '.join(f'0x{m:03x} {db.member_name(m)}' for m in members) or '-'}")
+    md.append(f"- Members: {', '.join(f'0x{m:03x} {db.member_name(m)}' for m in members) or '-'}")
     silent = state.get("silent", [])
-    md.append(f"- Passiv gesehen, ohne Probe-Antwort (silent): {', '.join(silent) or '-'}")
-    konst = sum(1 for r in rows if r["konstant"] == "ja")
-    veraend = sum(1 for r in rows if r["konstant"] == "nein")
+    md.append(f"- Passively seen, without probe response (silent): {', '.join(silent) or '-'}")
+    konst = sum(1 for r in rows if r["konstant"] == "yes")
+    veraend = sum(1 for r in rows if r["konstant"] == "no")
     konflikte = sum(1 for r in rows if r["konflikt"])
     unbekannt = sum(1 for r in rows if not r["name_ref"] and not r["name_mkgit"])
-    md.append(f"- Indizes mit Antwort ungleich 0x8000: {len(rows)} "
-              f"(konstant {konst}, veraenderlich {veraend}, ohne Mehrfachlesung "
+    md.append(f"- Indices with response not 0x8000: {len(rows)} "
+              f"(constant {konst}, changing {veraend}, without repeat reading "
               f"{len(rows) - konst - veraend})")
-    md.append(f"- Typkonflikte Referenz vs. mk-git: {konflikte}")
-    md.append(f"- Ohne Namen (weder Referenz noch mk-git): {unbekannt}")
+    md.append(f"- Type conflicts reference vs. mk-git: {konflikte}")
+    md.append(f"- Without names (neither reference nor mk-git): {unbekannt}")
     md.append("")
 
-    md.append("## Treffer je Stufe und Member")
+    md.append("## Hits per stage and member")
     md.append("")
     stage_rows = []
     for key in sorted(stage_counts):
@@ -403,13 +405,13 @@ def _build_markdown(state_path, state, rows, stage_items, stage_counts,
         stage_rows.append([f"0x{member:03x}", stage, fmt, f"0x{sw:02x}", c["tasks"], c["done"],
                            c["ok"], c["unsupported"], c["ohne_antwort"]])
     if stage_rows:
-        md += _md_table(["Member", "Stufe", "Format", "Switch", "Teil-Scans", "fertig", "ok",
-                         "unsupported (0x8000)", "ohne Antwort"], stage_rows)
+        md += _md_table(["Member", "Stage", "Format", "Switch", "Partial scans", "done", "ok",
+                         "unsupported (0x8000)", "no response"], stage_rows)
     else:
-        md.append("Keine Scan-Tasks im State.")
+        md.append("No scan tasks in state.")
     md.append("")
 
-    md.append("## Vergleich short/long fuer 0x00-0xFF")
+    md.append("## Comparison short/long for 0x00-0xFF")
     md.append("")
     any_cmp = False
     for member in members:
@@ -420,8 +422,8 @@ def _build_markdown(state_path, state, rows, stage_items, stage_counts,
         any_cmp = True
         if short is None or long_ is None:
             fehlt = "A1 (short)" if short is None else "A2 (long)"
-            md.append(f"**Member 0x{member:03x} {db.member_name(member)}**: Stufe {fehlt} "
-                      f"fehlt, kein Vergleich moeglich")
+            md.append(f"**Member 0x{member:03x} {db.member_name(member)}**: stage {fehlt} "
+                      f"missing, no comparison possible")
             md.append("")
             continue
         same = diff = only_one = 0
@@ -439,14 +441,14 @@ def _build_markdown(state_path, state, rows, stage_items, stage_counts,
                     diff_list.append(f"{_hex4(index)} short={_hex4(s[1])} long={_hex4(l_[1])}")
             elif s_ok or l_ok:
                 only_one += 1
-        md.append(f"**Member 0x{member:03x} {db.member_name(member)}**: gleich {same}, "
-                  f"abweichend {diff}, nur in einem Format {only_one}")
+        md.append(f"**Member 0x{member:03x} {db.member_name(member)}**: same {same}, "
+                  f"differs {diff}, in only one format {only_one}")
         md.append("")
         if diff_list:
-            md.append("Abweichend: " + "; ".join(diff_list))
+            md.append("Differs: " + "; ".join(diff_list))
             md.append("")
     if not any_cmp:
-        md.append("Keine Stufen A1/A2 im State, kein Vergleich moeglich.")
+        md.append("No stages A1/A2 in state, no comparison possible.")
         md.append("")
 
     md.append("## Min/Max (switch 0xF8/0xF9)")
@@ -463,26 +465,26 @@ def _build_markdown(state_path, state, rows, stage_items, stage_counts,
         mm_rows.append([r["member"], r["index"], r["name_ref"] or r["name_mkgit"],
                         r["min"] or "-", r["max"] or "-", plaus])
     if mm_rows:
-        md += _md_table(["Member", "Index", "Name", "min", "max", "Typ passt (Bonus)"], mm_rows)
+        md += _md_table(["Member", "Index", "Name", "min", "max", "Type fits (bonus)"], mm_rows)
     else:
-        md.append("Keine Min/Max-Werte im State.")
+        md.append("No min/max values in state.")
     md.append("")
 
-    md.append("## Typkonflikte Referenz vs. mk-git")
+    md.append("## Type conflicts reference vs. mk-git")
     md.append("")
     conf_rows = [[r["member"], r["index"], r["name_ref"] or r["name_mkgit"], r["type_ref"],
                   r["type_mkgit"], r["raws"]] for r in rows if r["konflikt"]]
     if conf_rows:
-        md += _md_table(["Member", "Index", "Name", "Typ Referenz", "Typ mk-git", "Rohwerte"],
-                        conf_rows)
+        md += _md_table(["Member", "Index", "Name", "Type reference", "Type mk-git",
+                         "Raw values"], conf_rows)
     else:
-        md.append("Keine.")
+        md.append("None.")
     if not mkgit_found:
         md.append("")
-        md.append("Hinweis: mk-git ElsterTable.h nicht gefunden, kein Abgleich.")
+        md.append("Note: mk-git ElsterTable.h not found, no comparison.")
     md.append("")
 
-    md.append("## Unbekannte Indizes mit Kandidaten")
+    md.append("## Unknown indices with candidates")
     md.append("")
     unk_rows = []
     for r in rows:
@@ -491,29 +493,29 @@ def _build_markdown(state_path, state, rows, stage_items, stage_counts,
         top = " | ".join(f"{n}:{s:.2f} ({smp})" for n, s, smp in r["_cands"][:3])
         unk_rows.append([r["member"], r["index"], r["raws"], r["konstant"], top or "-"])
     if unk_rows:
-        md += _md_table(["Member", "Index", "Rohwerte", "konstant", "Top-Kandidaten"], unk_rows)
+        md += _md_table(["Member", "Index", "Raw values", "constant", "Top candidates"], unk_rows)
     else:
-        md.append("Keine.")
+        md.append("None.")
     md.append("")
 
-    md.append("## Paar-Hinweise (benachbarte Indizes)")
+    md.append("## Pair hints (adjacent indices)")
     md.append("")
     hints = _pair_hints(names_for_pairs, present)
     if hints:
         md += _md_table(
-            ["Member", "Index", "Index+1", "Name", "Name+1", "Regel"],
+            ["Member", "Index", "Index+1", "Name", "Name+1", "Rule"],
             [[f"0x{h['member']:03x}", _hex4(h["index"]), _hex4(h["index_b"]),
               h["name_a"], h["name_b"], h["regel"]] for h in hints],
         )
     else:
-        md.append("Keine.")
+        md.append("None.")
     md.append("")
     return md
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
-        print("Aufruf: python -I type_guess.py <state.json>", file=sys.stderr)
+        print("Usage: python -I type_guess.py <state.json>", file=sys.stderr)
         return 2
     state_path = Path(argv[1])
     base = state_path.name

@@ -1,11 +1,11 @@
-"""MQTT-Bruecke fuer die mk1-debug-GUI (Schnittstelle laut INTERFACES.md, Abschnitt 5.2 und 8.3).
+"""MQTT bridge for the mk1 debug GUI (interface per INTERFACES.md, sections 5.2 and 8.3).
 
-paho-mqtt 1.6.x: Client(...) ohne CallbackAPIVersion. paho laeuft ueber loop_start
-im eigenen Thread; alle Ergebnisse gehen ausschliesslich ueber Qt-Signale an die GUI.
-Das Passwort wird weder gespeichert noch geloggt.
+paho-mqtt 1.6.x: Client(...) without CallbackAPIVersion. paho runs via loop_start
+in its own thread; all results go exclusively via Qt signals to the GUI.
+The password is neither stored nor logged.
 
-Produktiv-Firmware (fw "prod"): Befehle und Antworten laufen ueber prod_api (Topic-Wurzel
-heatingpump/). Debug-Firmware und unbekannte Firmware bleiben beim Praefix stiebel-debug/.
+Production firmware (fw "prod"): commands and responses run via prod_api (topic root
+heatingpump/). Debug firmware and unknown firmware stay with the prefix stiebel-debug/.
 """
 
 import json
@@ -18,7 +18,7 @@ import prod_api
 
 TOPIC_PREFIX = "stiebel-debug/"
 
-# Topic-Wurzel der Produktiv-Firmware. Alle Produktiv-Topics leiten sich davon ab.
+# Topic root of the production firmware. All production topics derive from it.
 PROD_ROOT = prod_api.PROD_ROOT
 
 RX_TOPICS = (
@@ -31,10 +31,10 @@ RX_TOPICS = (
     "availability",
 )
 
-# Verfuegbarkeit: Debug-Firmware (unter Praefix) und Produktiv-Firmware (eigenes Topic).
+# Availability: debug firmware (under the prefix) and production firmware (own topic).
 PROD_AVAILABILITY_TOPIC = PROD_ROOT + "/status"
-# Sniffer der Produktiv-Firmware: Frames (JSON-Array wie stiebel-debug/rx, ohne Feld "u"),
-# Zustand (retained "on"/"off") und Schalter (Payload "on"/"off", kein JSON, kein Filter).
+# Sniffer of the production firmware: frames (JSON array like stiebel-debug/rx, without field "u"),
+# state (retained "on"/"off") and switch (payload "on"/"off", not JSON, no filter).
 PROD_CAN_DEBUG_FRAMES = PROD_ROOT + "/can_debug/frames"
 PROD_CAN_DEBUG_STATE = PROD_ROOT + "/can_debug/state"
 PROD_CAN_DEBUG_SET = PROD_ROOT + "/can_debug/set"
@@ -43,25 +43,25 @@ AVAILABILITY_SOURCES = {
     "produktiv": PROD_AVAILABILITY_TOPIC,
 }
 
-# Firmware-Art aus stiebel-debug/status (Feld "fw"); fehlt das Feld, gilt "prod".
+# Firmware kind from stiebel-debug/status (field "fw"); if the field is missing, "prod" applies.
 FW_DEBUG = "debug"
 FW_PROD = "prod"
 FW_UNKNOWN = "unknown"
 
-SWITCH_DEFAULT = 0xFA            # aktueller Wert (Standard)
+SWITCH_DEFAULT = 0xFA            # current value (default)
 CMD_SWITCH_VALUES = (0xFA, 0xF8, 0xF9)
 CMD_FORMAT_VALUES = (None, "auto", "short", "long")
 
 
 def _to_int(value):
-    """Hex-String ("0x180", "0X4E00", "4e00") oder int in int wandeln. Sonst ValueError/TypeError."""
+    """Convert hex string ("0x180", "0X4E00", "4e00") or int to int. Otherwise ValueError/TypeError."""
     if isinstance(value, bool):
-        raise TypeError("bool ist kein Hex-Wert")
+        raise TypeError("bool is not a hex value")
     if isinstance(value, int):
         return value
     if isinstance(value, str):
         return int(value.strip(), 16)
-    raise TypeError("unerwarteter Typ fuer Hex-Wert")
+    raise TypeError("unexpected type for hex value")
 
 
 def _hex_id(value):
@@ -73,22 +73,22 @@ def _hex_index(value):
 
 
 def _opt_int(value):
-    """Wie _to_int, aber fehlendes Feld (None) bleibt None."""
+    """Like _to_int, but a missing field (None) stays None."""
     return None if value is None else _to_int(value)
 
 
 def _prod_switch(switch):
-    """Produktiv: Switch None gilt als 0xFA; ungueltige Werte prueft prod_api."""
+    """Production: switch None counts as 0xFA; invalid values are checked by prod_api."""
     return prod_api.SWITCH_VALUE if switch is None else switch
 
 
 class ClockSync:
-    """Zeitschaetzung ohne ESP-Zeitstempel (Fallback 'pc').
+    """Time estimate without ESP timestamp (fallback 'pc').
 
-    Pro Frame gilt: Ankunft (PC) - t/1000 = Offset + Latenz. Der kleinste Wert
-    seit dem letzten Reset hat die geringste Latenz und wird benutzt.
-    Reset, wenn ein Batch Zeitwerte kleiner als das bisher groesste t enthaelt
-    (ESP-Neustart).
+    For each frame: arrival (PC) - t/1000 = offset + latency. The smallest value since
+    the last reset has the lowest latency and is used.
+    Reset when a batch contains time values smaller than the largest t so far
+    (ESP restart).
     """
 
     def __init__(self):
@@ -114,52 +114,52 @@ class ClockSync:
 
 
 def _parse_switch(data: dict, default: int = SWITCH_DEFAULT) -> int:
-    """Switch aus Payload; fehlt das Feld (aeltere Firmware), gilt default (0xFA)."""
+    """Switch from payload; if the field is missing (older firmware), default (0xFA) applies."""
     raw = data.get("switch")
     if raw is None:
         return default
     value = _to_int(raw)
     if not 0 <= value <= 0xFF:
-        raise ValueError(f"Switch ausserhalb 8 Bit: {value}")
+        raise ValueError(f"Switch outside 8 bit: {value}")
     return value
 
 
 def _command_fields(fmt, switch) -> dict:
-    """Optionale Payload-Felder format/switch fuer cmd/read und cmd/scan. Standardwerte werden weggelassen."""
+    """Optional payload fields format/switch for cmd/read and cmd/scan. Default values are omitted."""
     fields = {}
     if fmt not in CMD_FORMAT_VALUES:
-        raise ValueError(f"unbekanntes Format: {fmt!r}")
+        raise ValueError(f"unknown format: {fmt!r}")
     if fmt not in (None, "auto"):
         fields["format"] = fmt
     if switch is not None:
         if switch not in CMD_SWITCH_VALUES:
-            raise ValueError(f"unbekannter Switch: {switch!r}")
+            raise ValueError(f"unknown switch: {switch!r}")
         if switch != SWITCH_DEFAULT:
             fields["switch"] = f"0x{switch:02x}"
     return fields
 
 
 def _prod_check_format(fmt) -> None:
-    """Produktiv kennt nur das Format auto (Standard). short/long gibt es dort nicht."""
+    """Production supports only format auto (default). short/long do not exist there."""
     if fmt in ("short", "long"):
-        raise ValueError(f"Format {fmt!r} im Produktiv-Modus nicht verfuegbar")
+        raise ValueError(f"format {fmt!r} not available in production mode")
     if fmt not in (None, "auto"):
-        raise ValueError(f"unbekanntes Format: {fmt!r}")
+        raise ValueError(f"unknown format: {fmt!r}")
 
 
 class MqttBridge(QObject):
     connected = Signal(bool)
-    rx_frames = Signal(list)         # Liste von dict {"t","id"(int),"data"(bytes),"tx"(bool)}
-    read_result = Signal(dict)       # Payload von read/result, member/index/raw/switch als int
-    write_result = Signal(dict)      # write/result: member/index/value/ack/readback als int|None, status str|None
-    scan_progress = Signal(dict)     # index/switch als int
-    scan_result = Signal(dict)       # items mit index/raw/switch als int
+    rx_frames = Signal(list)         # list of dict {"t","id"(int),"data"(bytes),"tx"(bool)}
+    read_result = Signal(dict)       # payload of read/result, member/index/raw/switch as int
+    write_result = Signal(dict)      # write/result: member/index/value/ack/readback as int|None, status str|None
+    scan_progress = Signal(dict)     # index/switch as int
+    scan_result = Signal(dict)       # items with index/raw/switch as int
     status = Signal(dict)
-    availability = Signal(str)       # kombiniert: "offline" gewinnt, sonst "online"
-    availability_source = Signal(str)  # "debug" oder "produktiv", unmittelbar vor availability
-    firmware_kind = Signal(str)      # "debug" | "prod" | "unknown"; nur bei Aenderung
-    can_debug_state = Signal(bool)   # Produktiv-Sniffer an/aus (retained heatingpump/can_debug/state)
-    member_result = Signal(dict)     # Produktiv-Member-Scan: {"id","index","raw"} als int
+    availability = Signal(str)       # combined: "offline" wins, otherwise "online"
+    availability_source = Signal(str)  # "debug" or "produktiv", emitted immediately before availability
+    firmware_kind = Signal(str)      # "debug" | "prod" | "unknown"; only on change
+    can_debug_state = Signal(bool)   # production sniffer on/off (retained heatingpump/can_debug/state)
+    member_result = Signal(dict)     # production member scan: {"id","index","raw"} as int
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -167,16 +167,16 @@ class MqttBridge(QObject):
         self._avail_by_source: dict[str, str | None] = {"debug": None, "produktiv": None}
         self._fw: str = FW_UNKNOWN
         self._clock = ClockSync()
-        self._now = time.time  # Ankunftszeit; in Tests ersetzbar
-        # Produktiv-Scan, den diese Bridge gesendet hat (None = keiner). Retained Altlasten
-        # des Brokers werden verworfen, solange kein scharfer Scan existiert.
-        # Form: {"kind": "range"|"members", "name": str (klein), "can_id": int|None,
+        self._now = time.time  # arrival time; replaceable in tests
+        # Production scan sent by this bridge (None = none). Retained leftovers from the broker
+        # are discarded as long as no active scan exists.
+        # Form: {"kind": "range"|"members", "name": str (lower case), "can_id": int|None,
         #        "switch": int, "running": bool}
         self._prod_scan: dict | None = None
-        self.stale_ignored = 0           # verworfene Scan-Nachrichten (Zaehler)
+        self.stale_ignored = 0           # discarded scan messages (counter)
 
     # ------------------------------------------------------------------
-    # Verbindung
+    # Connection
     # ------------------------------------------------------------------
     def connect_to(self, host: str, port: int, user: str, password: str) -> None:
         self.disconnect_from()
@@ -216,7 +216,7 @@ class MqttBridge(QObject):
             pass
 
     # ------------------------------------------------------------------
-    # Senden (qos 0)
+    # Sending (qos 0)
     # ------------------------------------------------------------------
     def _publish(self, suffix: str, payload: dict) -> None:
         client = self._client
@@ -237,10 +237,10 @@ class MqttBridge(QObject):
             pass
 
     def send_sniff(self, on: bool, ids: list[int], types: list[int]) -> None:
-        """Produktiv-Firmware (fw "prod"): heatingpump/can_debug/set "on"/"off". ids/types entfallen,
-        der Filter wird clientseitig angewendet. Debug-Firmware: stiebel-debug/cmd/sniff.
-        Firmware-Art noch unbekannt (kein Status empfangen): an beide senden, die jeweils andere
-        Firmware ignoriert das fremde Topic."""
+        """Production firmware (fw "prod"): heatingpump/can_debug/set "on"/"off". ids/types are omitted,
+        the filter is applied client-side. Debug firmware: stiebel-debug/cmd/sniff.
+        Firmware kind still unknown (no status received): send to both; each firmware ignores
+        the other firmware's topic."""
         if self._fw in (FW_PROD, FW_UNKNOWN):
             self._publish_raw(PROD_CAN_DEBUG_SET, "on" if on else "off")
             if self._fw == FW_PROD:
@@ -252,16 +252,16 @@ class MqttBridge(QObject):
         })
 
     def send_read(self, member: int, index: int, fmt=None, switch=None, src=None, timeout_ms=None) -> None:
-        """fmt: None|"auto"|"short"|"long"; switch: None|0xFA|0xF8|0xF9. Ungueltige Werte: ValueError.
-        src: Absender-CAN-ID (None/0x680 = Standard), timeout_ms: 100..10000 (None/1000 = Standard).
+        """fmt: None|"auto"|"short"|"long"; switch: None|0xFA|0xF8|0xF9. Invalid values: ValueError.
+        src: sender CAN ID (None/0x680 = default), timeout_ms: 100..10000 (None/1000 = default).
 
-        Produktiv: Rohtext auf heatingpump/raw/read. fmt short/long und src (ausser 0x680) gibt es
-        dort nicht (ValueError). timeout_ms entfaellt.
+        Production: raw text on heatingpump/raw/read. fmt short/long and src (other than 0x680)
+        do not exist there (ValueError). timeout_ms is omitted.
         """
         if self._fw == FW_PROD:
             _prod_check_format(fmt)
             if src is not None and src != prod_api.PC_CAN_ID:
-                raise ValueError("Absender (src) im Produktiv-Modus nicht verfuegbar")
+                raise ValueError("sender (src) not available in production mode")
             self._publish_raw(prod_api.TOPIC_RAW_READ,
                               prod_api.raw_read_payload(member, index, _prod_switch(switch)))
             return
@@ -272,26 +272,26 @@ class MqttBridge(QObject):
         payload.update(_command_fields(fmt, switch))
         if src is not None and src != 0x680:
             if not 0 <= src <= 0x7FF or src == member:
-                raise ValueError(f"ungueltiger Absender: {src!r}")
+                raise ValueError(f"invalid sender: {src!r}")
             payload["src"] = _hex_id(src)
         if timeout_ms is not None and timeout_ms != 1000:
             if not 100 <= timeout_ms <= 10000:
-                raise ValueError(f"Timeout ausserhalb 100..10000 ms: {timeout_ms!r}")
+                raise ValueError(f"timeout outside 100..10000 ms: {timeout_ms!r}")
             payload["timeout_ms"] = int(timeout_ms)
         self._publish("cmd/read", payload)
 
     def send_write(self, member: int, index: int, value: int, fmt='auto') -> None:
-        """Schreibbefehl. Member 0..0x7FF (nicht 0x680), Index/Wert 0..0xFFFF, sonst ValueError.
-        Produktiv: Rohtext auf heatingpump/raw/write; fmt muss 'auto' sein."""
+        """Write command. Member 0..0x7FF (not 0x680), index/value 0..0xFFFF, otherwise ValueError.
+        Production: raw text on heatingpump/raw/write; fmt must be 'auto'."""
         if not 0 <= member <= 0x7FF or member == 0x680:
-            raise ValueError(f"ungueltiger Member: {member!r}")
+            raise ValueError(f"invalid member: {member!r}")
         if not 0 <= index <= 0xFFFF:
-            raise ValueError(f"Index ausserhalb 16 Bit: {index!r}")
+            raise ValueError(f"index outside 16 bit: {index!r}")
         if not 0 <= value <= 0xFFFF:
-            raise ValueError(f"Wert ausserhalb 16 Bit: {value!r}")
+            raise ValueError(f"value outside 16 bit: {value!r}")
         if self._fw == FW_PROD:
             if fmt != 'auto':
-                raise ValueError(f"Format {fmt!r} im Produktiv-Modus nicht verfuegbar")
+                raise ValueError(f"format {fmt!r} not available in production mode")
             self._publish_raw(prod_api.TOPIC_RAW_WRITE,
                               prod_api.raw_write_payload(member, index, value))
             return
@@ -306,9 +306,9 @@ class MqttBridge(QObject):
 
     def send_scan(self, member: int, from_idx: int, to_idx: int, delay_ms: int,
                   fmt=None, switch=None) -> None:
-        """Wie send_read; ungueltige fmt/switch-Werte: ValueError.
+        """Like send_read; invalid fmt/switch values: ValueError.
 
-        Produktiv: scan/start mit Bereich; delay_ms entfaellt. Der Scan wird scharf gesetzt.
+        Production: scan/start with range; delay_ms is omitted. The scan is set active.
         """
         if self._fw == FW_PROD:
             _prod_check_format(fmt)
@@ -333,9 +333,9 @@ class MqttBridge(QObject):
         self._publish("cmd/scan", payload)
 
     def send_member_scan(self, lo: int = 0, hi: int = 0x7FF, index: int = 0x000B) -> None:
-        """Produktiv-Member-Scan (scan/members). Nur bei Produktiv-Firmware, sonst ValueError."""
+        """Production member scan (scan/members). Only with production firmware, otherwise ValueError."""
         if self._fw != FW_PROD:
-            raise ValueError("nur Produktiv-Firmware")
+            raise ValueError("production firmware only")
         payload = prod_api.members_payload(lo, hi, index)
         self._prod_scan = {
             "kind": "members",
@@ -353,12 +353,12 @@ class MqttBridge(QObject):
         self._publish("cmd/stop", {})
 
     # ------------------------------------------------------------------
-    # Verfuegbarkeit
+    # Availability
     # ------------------------------------------------------------------
     def _combined_availability(self) -> str | None:
-        """offline gewinnt; online nur wenn keine Quelle offline meldet und mindestens eine online.
+        """"offline" wins; "online" only if no source reports offline and at least one reports online.
 
-        Bei Debug-Firmware zaehlt nur stiebel-debug/availability (heatingpump/status wird ignoriert).
+        With debug firmware only stiebel-debug/availability counts (heatingpump/status is ignored).
         """
         if self._fw == FW_DEBUG:
             states = [self._avail_by_source["debug"]]
@@ -372,8 +372,8 @@ class MqttBridge(QObject):
         return None
 
     def _set_firmware_kind(self, kind: str) -> None:
-        """Firmware-Art setzen; Signal nur bei Aenderung. Wechsel zu debug/prod wertet Verfuegbarkeit neu aus.
-        Bei Wechsel ist ein Produktiv-Scan nicht mehr gueltig und wird geloescht."""
+        """Set firmware kind; signal only on change. On change to debug/prod, availability is re-evaluated.
+        On change, a production scan is no longer valid and is cleared."""
         if kind == self._fw:
             return
         self._fw = kind
@@ -388,16 +388,16 @@ class MqttBridge(QObject):
         value = text.strip()
         if value not in ("online", "offline"):
             return
-        self._avail_by_source[source] = value  # auch merken, falls die Firmware spaeter wechselt
+        self._avail_by_source[source] = value  # also remember in case the firmware changes later
         if source == "produktiv" and self._fw == FW_DEBUG:
-            return  # Debug-Firmware: heatingpump/status wird ignoriert
+            return  # Debug firmware: heatingpump/status is ignored
         self.availability_source.emit(source)
         combined = self._combined_availability()
         if combined is not None:
             self.availability.emit(combined)
 
     # ------------------------------------------------------------------
-    # paho-Callbacks (laufen im paho-Thread)
+    # paho callbacks (run in the paho thread)
     # ------------------------------------------------------------------
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -425,14 +425,14 @@ class MqttBridge(QObject):
             self.can_debug_state.emit(value == "on")
 
     def _handle_frames(self, data) -> None:
-        """Frame-Batch (JSON-Array) aus stiebel-debug/rx oder heatingpump/can_debug/frames.
+        """Frame batch (JSON array) from stiebel-debug/rx or heatingpump/can_debug/frames.
 
-        Fehlt "u" (Produktiv-Firmware), wird die Zeit aus t per ClockSync geschaetzt (ts_src "pc").
+        If "u" is missing (production firmware), the time is estimated from t via ClockSync (ts_src "pc").
         """
         if not isinstance(data, list):
             return
         arrival = self._now()
-        pending = []  # (Item, Frame) ohne Zeitfelder
+        pending = []  # (item, frame) without time fields
         for item in data:
             try:
                 pending.append((item, {
@@ -443,7 +443,7 @@ class MqttBridge(QObject):
                 }))
             except Exception:
                 continue
-        # Fallback 'pc': nur Frames ohne ESP-Zeit speisen die Schaetzung.
+        # Fallback 'pc': only frames without ESP time feed the estimate.
         pc_t = [frame["t"] for item, frame in pending if item.get("u") is None]
         if pc_t:
             self._clock.update(arrival, pc_t)
@@ -462,17 +462,17 @@ class MqttBridge(QObject):
         if frames:
             self.rx_frames.emit(frames)
 
-    # ---- Produktiv: Scan-Zustand und Antworten --------------------------
+    # ---- Production: scan state and responses --------------------------
 
     @staticmethod
     def _scan_matches(scan: dict, status: dict) -> bool:
-        """Passt der Scan-Status (mode, member) zum gesendeten Scan?"""
+        """Does the scan status (mode, member) match the sent scan?"""
         if scan["kind"] == "members":
             return status["mode"] == "members"
         return status["mode"] == "range" and status["member"].lower() == scan["name"]
 
     def _handle_raw_result(self, text: str) -> None:
-        """heatingpump/raw/result: Antwort auf raw/read oder raw/write. Ohne Scharf-Pruefung."""
+        """heatingpump/raw/result: response to raw/read or raw/write. No active-scan check."""
         obj = prod_api.parse_raw_result(text)
         if obj is None:
             return
@@ -496,7 +496,7 @@ class MqttBridge(QObject):
             })
 
     def _handle_scan_status(self, text: str) -> None:
-        """heatingpump/scan/status. Ohne scharfen Scan oder ohne passendes running: verwerfen."""
+        """heatingpump/scan/status. Without active scan or without matching running: discard."""
         status = prod_api.parse_scan_status(text)
         if status is None:
             return
@@ -516,7 +516,7 @@ class MqttBridge(QObject):
             self._prod_scan = None
 
     def _handle_scan_result(self, parsed, text: str) -> None:
-        """heatingpump/scan/<name>/0x<idx>[/f8|/f9]: nur fuer den laufenden Bereichs-Scan."""
+        """heatingpump/scan/<name>/0x<idx>[/f8|/f9]: only for the running range scan."""
         name, index, switch = parsed
         result = prod_api.parse_scan_result(text)
         if result is None:
@@ -540,7 +540,7 @@ class MqttBridge(QObject):
         })
 
     def _handle_member_result(self, can_id: int, text: str) -> None:
-        """heatingpump/scan/members/0x<id>: nur fuer den laufenden Member-Scan."""
+        """heatingpump/scan/members/0x<id>: only for the running member scan."""
         result = prod_api.parse_member_result(text)
         if result is None:
             return
@@ -563,10 +563,10 @@ class MqttBridge(QObject):
             self._handle_scan_result(parsed, text)
 
     def _on_message(self, client, userdata, msg):
-        """Nachricht verarbeiten. Fehlerhafte Nachrichten werden ignoriert.
+        """Process message. Faulty messages are ignored.
 
-        Ohne Netzwerk testbar: Tests rufen diese Methode mit einem Fake-Objekt
-        (Attribute topic, payload) direkt auf.
+        Testable without network: tests call this method directly with a fake object
+        (attributes topic, payload).
         """
         try:
             topic = msg.topic
@@ -608,7 +608,7 @@ class MqttBridge(QObject):
                 out["index"] = _to_int(data["index"])
                 out["raw"] = _to_int(data["raw"])
                 out["switch"] = _parse_switch(data)
-                out["src"] = _to_int(data.get("src", "0x680"))  # fehlt = 0x680
+                out["src"] = _to_int(data.get("src", "0x680"))  # missing = 0x680
                 self.read_result.emit(out)
 
             elif suffix == "write/result":
@@ -657,5 +657,5 @@ class MqttBridge(QObject):
                 self._set_firmware_kind(FW_DEBUG if data.get("fw") == FW_DEBUG else FW_PROD)
                 self.status.emit(data)
         except Exception:
-            # Fehlerhafte Nachricht (kein UTF-8, kein JSON, falsche Felder): ignorieren.
+            # Faulty message (not UTF-8, not JSON, wrong fields): ignore.
             return

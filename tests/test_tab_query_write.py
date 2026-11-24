@@ -1,10 +1,10 @@
-"""Tests fuer den Schreibmodus des Tabs Abfrage und die freie Member-Eingabe.
+"""Tests for the write mode of the Query tab and free member input.
 
-Fake-Bridge mit denselben Signalen und Sendemethoden wie MqttBridge; Qt laeuft offscreen.
-encode_value/build_write_request/is_writable werden fuer die meisten Tests ueber
-monkeypatch durch einfache Fakes ersetzt; ein Test prueft die echte encode_value, falls vorhanden.
+Fake bridge with the same signals and send methods as MqttBridge; Qt runs offscreen.
+encode_value/build_write_request/is_writable are replaced by simple fakes via
+monkeypatch for most tests; one test checks the real encode_value, if available.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_tab_query_write.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_tab_query_write.py -q
 """
 
 import os
@@ -26,7 +26,7 @@ import tab_query  # noqa: E402
 from elster import ElsterDb  # noqa: E402
 
 SPEICHER = 0x201
-INDEX = 0x0013  # WW_KOMFORT_TEMPERATUR, Typ et_dec_val
+INDEX = 0x0013  # WW_KOMFORT_TEMPERATUR, type et_dec_val
 
 
 class FakeBridge(QObject):
@@ -66,7 +66,7 @@ def db():
 
 @pytest.fixture
 def fake_elster(monkeypatch):
-    """Einfache Fakes: Typ et_dec_val, Wert * 10 -> Rohwert; Frame = Member, Index, Rohwert."""
+    """Simple fakes: type et_dec_val, value * 10 -> raw value; frame = member, index, raw value."""
     monkeypatch.setattr(tab_query, "encode_value", lambda t, s: int(round(float(s) * 10)))
     monkeypatch.setattr(tab_query, "is_writable", lambda t: True)
     monkeypatch.setattr(tab_query, "build_write_request",
@@ -90,7 +90,7 @@ def _write_result(status="verified", value=0x0208, readback=0x0208, ack=4):
             "ack": ack, "readback": readback}
 
 
-# ---------------------------------------------------------------- freie Member-Eingabe
+# ---------------------------------------------------------------- free member input
 
 def test_member_free_hex_accepted_and_read_sent(qapp, db):
     fake = FakeBridge()
@@ -143,12 +143,12 @@ def test_unknown_member_shown_as_unbekannt_in_result(qapp, db):
     assert tab._table.item(0, tab_query.HEADERS.index("Member")).text() == "UNBEKANNT_0x4ab"
 
 
-# ---------------------------------------------------------------- Modus und Sperre
+# ---------------------------------------------------------------- Mode and lock
 
 def test_write_mode_shows_write_controls(qapp, db):
     fake = FakeBridge()
     tab = _write_tab(db, fake)
-    assert tab._switch_combo.isHidden()  # Switch im Schreibmodus ausgeblendet
+    assert tab._switch_combo.isHidden()  # switch hidden in write mode
     assert not tab._value_edit.isHidden()
     assert not tab._send_btn.isHidden()
     assert tab._query_btn.isHidden()
@@ -178,7 +178,7 @@ def test_send_enabled_in_prod_firmware_after_arm(qapp, db, fake_elster, monkeypa
     fake = FakeBridge()
     tab = _write_tab(db, fake)
     fake.firmware_kind.emit("prod")
-    assert not tab._arm_check.isChecked()  # Firmwarewechsel entschaerft
+    assert not tab._arm_check.isChecked()  # firmware change disarmed
     assert not tab._send_btn.isEnabled()
     assert tab._value_edit.isEnabled()
     assert tab._arm_check.isEnabled()
@@ -195,14 +195,14 @@ def test_arm_reset_on_firmware_change(qapp, db, fake_elster):
     fake.firmware_kind.emit("unknown")
     assert not tab._arm_check.isChecked()
     fake.firmware_kind.emit("debug")
-    assert not tab._send_btn.isEnabled()  # wieder aus, bis erneut freigeschaltet
+    assert not tab._send_btn.isEnabled()  # off again until re-enabled
 
 
 def test_send_blocked_for_invalid_member(qapp, db, fake_elster):
     fake = FakeBridge()
     tab = _write_tab(db, fake, member_text="0x680")
     assert not tab._send_btn.isEnabled()
-    assert "0x680" in tab._preview_label.text()  # Fehlertext in der Vorschau
+    assert "0x680" in tab._preview_label.text()  # error text in the preview
 
 
 def test_send_blocked_for_non_writable_type(qapp, db, fake_elster, monkeypatch):
@@ -210,7 +210,7 @@ def test_send_blocked_for_non_writable_type(qapp, db, fake_elster, monkeypatch):
     fake = FakeBridge()
     tab = _write_tab(db, fake)
     assert not tab._send_btn.isEnabled()
-    assert "nicht schreibbar" in tab._preview_label.text()
+    assert "not writable" in tab._preview_label.text()
 
 
 def test_raw_mode_sends_without_type_check(qapp, db, fake_elster, monkeypatch):
@@ -230,7 +230,7 @@ def test_enter_in_write_mode_never_sends(qapp, db, fake_elster):
     assert fake.writes == []
 
 
-# ---------------------------------------------------------------- Senden und Bestaetigung
+# ---------------------------------------------------------------- Send and confirmation
 
 def test_confirm_rejected_no_send(qapp, db, fake_elster, monkeypatch):
     asked = []
@@ -241,7 +241,7 @@ def test_confirm_rejected_no_send(qapp, db, fake_elster, monkeypatch):
     tab._on_send()
     assert len(asked) == 1
     assert fake.writes == []
-    assert tab._arm_check.isChecked()  # Abbruch: Freischaltung bleibt
+    assert tab._arm_check.isChecked()  # cancel: enabling stays
 
 
 def test_confirm_text_contains_details(qapp, db, fake_elster, monkeypatch):
@@ -250,12 +250,12 @@ def test_confirm_text_contains_details(qapp, db, fake_elster, monkeypatch):
                         lambda self, text: asked.append(text) or False)
     fake = FakeBridge()
     tab = _write_tab(db, fake, member_text="0x4ab")
-    tab._on_send()  # Member 0x4ab ist unbekannt, aber gueltig
+    tab._on_send()  # member 0x4ab is unknown, but valid
     text = asked[0]
     assert "Member: UNBEKANNT_0x4ab (0x4ab)" in text
-    assert "Unbekannter Member" in text
-    assert "Unbekanntes Signal" not in text
-    assert "0x0013" in text and "Rohwert: 0x0208" in text
+    assert "Warning: unknown member" in text
+    assert "unknown signal" not in text
+    assert "0x0013" in text and "Raw value: 0x0208" in text
 
 
 def test_confirm_text_names_signal_and_member(qapp, db, fake_elster, monkeypatch):
@@ -268,8 +268,8 @@ def test_confirm_text_names_signal_and_member(qapp, db, fake_elster, monkeypatch
     text = asked[0]
     assert "SPEICHER (0x201)" in text
     assert "WW_KOMFORT_TEMPERATUR" in text
-    assert "Typ: et_dec_val" in text
-    assert "Unbekannter" not in text
+    assert "Type: et_dec_val" in text
+    assert "unknown member" not in text
 
 
 def test_confirm_ok_sends_raw(qapp, db, fake_elster, monkeypatch):
@@ -278,7 +278,7 @@ def test_confirm_ok_sends_raw(qapp, db, fake_elster, monkeypatch):
     tab = _write_tab(db, fake)
     tab._on_send()
     assert fake.writes == [(SPEICHER, INDEX, 0x0208, "auto")]
-    assert not tab._send_btn.isEnabled()  # Pending: kein zweiter Sendeauftrag
+    assert not tab._send_btn.isEnabled()  # pending: no second send request
 
 
 def test_real_encode_52_0_gives_raw_0x0208(qapp, db, monkeypatch):
@@ -302,14 +302,14 @@ def test_write_result_adds_row_and_locks(qapp, db, fake_elster, monkeypatch):
     fake.write_result.emit(_write_result())
     assert tab._table.rowCount() == 1
     cell = lambda h: tab._table.item(0, tab_query.HEADERS.index(h)).text()  # noqa: E731
-    assert cell("Modus") == "Schreiben"
+    assert cell("Mode") == "Write"
     assert cell("Member") == "SPEICHER"
     assert cell("Index") == "0x0013"
     assert cell("Ack") == "write ack"
-    assert cell("Rücklesewert") == "52.0"
+    assert cell("Readback value") == "52.0"
     assert cell("Status") == "verified"
     assert "verified" in tab._info_label.text()
-    assert not tab._arm_check.isChecked()  # Freischaltung wieder aus
+    assert not tab._arm_check.isChecked()  # enabling off again
     assert not tab._send_btn.isEnabled()
 
 
@@ -319,7 +319,7 @@ def test_write_result_without_ack_and_readback(qapp, db, fake_elster):
     fake.write_result.emit(_write_result(status="no_ack", readback=None, ack=None))
     cell = lambda h: tab._table.item(0, tab_query.HEADERS.index(h)).text()  # noqa: E731
     assert cell("Ack") == "-"
-    assert cell("Rücklesewert") == "–"
+    assert cell("Readback value") == "–"
     assert cell("Status") == "no_ack"
     assert not tab._arm_check.isChecked()
 
@@ -329,4 +329,4 @@ def test_write_result_mismatch_status_shown(qapp, db, fake_elster):
     tab = _write_tab(db, fake)
     fake.write_result.emit(_write_result(status="mismatch", readback=0x01F4))  # 500 -> 50.0
     assert tab._table.item(0, tab_query.HEADERS.index("Status")).text() == "mismatch"
-    assert tab._table.item(0, tab_query.HEADERS.index("Rücklesewert")).text() == "50.0"
+    assert tab._table.item(0, tab_query.HEADERS.index("Readback value")).text() == "50.0"

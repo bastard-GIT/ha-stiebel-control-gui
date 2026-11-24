@@ -1,6 +1,6 @@
-"""Index-Browser: alle Indizes einer Messung mit Abgleich gegen Referenz und mk-git.
+"""Index browser: all indices of a measurement, matched against reference and mk-git.
 
-Reine Qt-Ansicht. Daten: data_model.Measurements, reference_model.ReferenceModel,
+Pure Qt view. Data: data_model.Measurements, reference_model.ReferenceModel,
 type_guess.load_mkgit_table (dict Index -> (Name, Typ)).
 """
 
@@ -24,21 +24,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-COLUMNS = ["Index", "Name Ref", "Name mk-git", "Status", "Member", "Min/Max", "Typ-Abweichung"]
+COLUMNS = ["Index", "Name Ref", "Name mk-git", "Status", "Member", "Min/Max", "Type mismatch"]
 COL_INDEX, COL_NAME_REF, COL_NAME_MK, COL_STATUS, COL_MEMBER, COL_MINMAX, COL_TYPE = range(7)
 NUMERIC_COLS = (COL_INDEX, COL_MEMBER)
 RIGHT_ALIGNED_COLS = NUMERIC_COLS
 
-ST_REF = "Referenz"
-ST_MK = "nur mk-git"
-ST_UNK = "unbekannt"
-# Dezente Hintergrundfarben mit Alpha: lesbar im Hell- und Dunkelmodus.
+ST_REF = "Reference"
+ST_MK = "only mk-git"
+ST_UNK = "unknown"
+# Subtle background colors with alpha: readable in light and dark mode.
 STATUS_COLORS = {
     ST_REF: QColor(46, 160, 67, 70),
     ST_MK: QColor(230, 180, 0, 70),
     ST_UNK: QColor(220, 53, 69, 60),
 }
-STATUS_CHOICES = (("alle", None), ("Referenz", ST_REF), ("nur mk-git", ST_MK), ("unbekannt", ST_UNK))
+STATUS_CHOICES = (("all", None), ("Reference", ST_REF), ("only mk-git", ST_MK), ("unknown", ST_UNK))
 
 
 @dataclass
@@ -47,14 +47,14 @@ class _Row:
     name_ref: str
     name_mk: str
     status: str
-    members: int          # Anzahl Member mit Status 'ok'
-    has_minmax: bool      # mindestens ein Member mit min_raw und max_raw
-    type_diff: bool       # Ref-Typ und mk-git-Typ vorhanden und verschieden
-    search: str           # Suchtext (kleingeschrieben): Index-Hex und Namen
+    members: int          # number of members with status 'ok'
+    has_minmax: bool      # at least one member with min_raw and max_raw
+    type_diff: bool       # ref type and mk-git type present and different
+    search: str           # search text (lowercase): index hex and names
 
 
 class _NumItem(QTableWidgetItem):
-    """Zelle mit numerischer Sortierung ueber Qt.UserRole (Anzeige bleibt Text)."""
+    """Cell with numeric sorting via Qt.UserRole (display stays text)."""
 
     def __lt__(self, other: QTableWidgetItem) -> bool:
         a = self.data(Qt.UserRole)
@@ -73,8 +73,8 @@ class IndexBrowser(QWidget):
         self._ref = ref
         self._mkgit = mkgit or {}
         self._recs: dict[int, _Row] = {}
-        self._loading = False     # unterdrueckt Signale waehrend reload/refresh
-        self._last: int | None = None  # zuletzt gemeldeter Index
+        self._loading = False     # suppresses signals during reload/refresh
+        self._last: int | None = None  # last reported index
 
         self._build_ui()
         self.reload()
@@ -83,12 +83,12 @@ class IndexBrowser(QWidget):
 
     def _build_ui(self) -> None:
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Index (0x...) oder Name")
+        self._search.setPlaceholderText("Index (0x...) or name")
         self._status = QComboBox()
         for label, value in STATUS_CHOICES:
             self._status.addItem(label, value)
-        self._only_minmax = QCheckBox("nur mit Min/Max")
-        self._only_diff = QCheckBox("nur Typ-Abweichung")
+        self._only_minmax = QCheckBox("only with min/max")
+        self._only_diff = QCheckBox("only type mismatch")
         self._count = QLabel()
 
         filters = QHBoxLayout()
@@ -98,9 +98,9 @@ class IndexBrowser(QWidget):
         filters.addWidget(self._only_diff)
         filters.addWidget(self._count)
 
-        self._back_btn = QPushButton("Zurueck")
-        self._next_btn = QPushButton("Weiter")
-        self._unknown_btn = QPushButton("Naechster unbekannter")
+        self._back_btn = QPushButton("Back")
+        self._next_btn = QPushButton("Next")
+        self._unknown_btn = QPushButton("Next unknown")
         nav = QHBoxLayout()
         nav.addWidget(self._back_btn)
         nav.addWidget(self._next_btn)
@@ -132,10 +132,10 @@ class IndexBrowser(QWidget):
         self._unknown_btn.clicked.connect(lambda: self._go(+1, unknown_only=True, wrap=True))
         self._table.itemSelectionChanged.connect(self._on_selection)
 
-    # ---------- Daten ----------
+    # ---------- Data ----------
 
     def _build_rows(self) -> dict[int, _Row]:
-        # Referenz-Signale einmal als Map: ref.signal() waere pro Index eine lineare Suche.
+        # Reference signals once as a map: ref.signal() would be a linear search per index.
         ref_map = {int(s["index_int"]): s for s in self._ref.data.get("signals", [])
                    if not s.get("sentinel")}
         recs: dict[int, _Row] = {}
@@ -172,12 +172,12 @@ class IndexBrowser(QWidget):
             rec.name_mk,
             rec.status,
             str(rec.members),
-            "ja" if rec.has_minmax else "nein",
-            "ja" if rec.type_diff else "nein",
+            "yes" if rec.has_minmax else "no",
+            "yes" if rec.type_diff else "no",
         ]
 
     def _set_row(self, row: int, rec: _Row) -> None:
-        """Zeile neu anlegen (Tabelle ohne Sortierung, ohne Auswahl)."""
+        """Create row (table without sorting, without selection)."""
         for col, text in enumerate(self._texts(rec)):
             item = _NumItem(text) if col in NUMERIC_COLS else QTableWidgetItem(text)
             if col in RIGHT_ALIGNED_COLS:
@@ -186,7 +186,7 @@ class IndexBrowser(QWidget):
         self._style_row(row, rec)
 
     def _update_row(self, row: int, rec: _Row) -> None:
-        """Bestehende Zellen aendern. setItem auf ausgewaehlter Zeile ist sehr langsam."""
+        """Change existing cells. setItem on the selected row is very slow."""
         for col, text in enumerate(self._texts(rec)):
             self._table.item(row, col).setText(text)
         self._style_row(row, rec)
@@ -223,15 +223,15 @@ class IndexBrowser(QWidget):
                     and (not only_diff or rec.type_diff))
             self._table.setRowHidden(row, not show)
             visible += int(show)
-        self._count.setText(f"{visible} von {len(self._recs)} Indizes")
+        self._count.setText(f"{visible} of {len(self._recs)} indices")
 
     # ---------- Navigation ----------
 
     def _candidates(self, cur: int, direction: int, wrap: bool):
-        """Zeilen-Reihenfolge ab cur in Richtung direction (ohne cur selbst)."""
+        """Row order from cur in direction (without cur itself)."""
         n = self._table.rowCount()
         if cur < 0:
-            # ohne Auswahl: vorwaerts bei 0 beginnen, rueckwaerts am Ende
+            # no selection: forward starts at 0, backward at the end
             cur = -1 if direction > 0 else n
         for step in range(1, n + 1):
             row = cur + direction * step
@@ -247,7 +247,7 @@ class IndexBrowser(QWidget):
                 continue
             if unknown_only and self._row_status(row) != ST_UNK:
                 continue
-            self._table.setCurrentCell(row, 0)  # waehlt die ganze Zeile (SelectRows)
+            self._table.setCurrentCell(row, 0)  # selects the whole row (SelectRows)
             self._table.scrollToItem(self._table.item(row, 0))
             return
 
@@ -261,7 +261,7 @@ class IndexBrowser(QWidget):
         if index is not None:
             self.indexSelected.emit(index)
 
-    # ---------- Oeffentliche Methoden ----------
+    # ---------- Public methods ----------
 
     def set_models(self, meas, ref, mkgit) -> None:
         self._meas = meas
@@ -270,7 +270,7 @@ class IndexBrowser(QWidget):
         self.reload()
 
     def reload(self) -> None:
-        """Tabelle neu fuellen; aktuelle Auswahl nach Index wiederherstellen."""
+        """Refill table; restore current selection by index."""
         prev = self.current_index()
         self._loading = True
         try:
@@ -303,10 +303,10 @@ class IndexBrowser(QWidget):
                 self._table.setCurrentCell(row, 0)
                 self._table.scrollToItem(self._table.item(row, 0))
                 return True
-        return False  # nicht gefunden (Zeilen-Schleife ohne Treffer)
+        return False  # not found (row loop without hit)
 
     def select_index(self, index: int) -> bool:
-        """Zeile zu index waehlen. False, wenn Index fehlt oder per Filter ausgeblendet."""
+        """Select row for index. False if index is missing or hidden by filter."""
         return self._select_row_for(int(index))
 
     def current_index(self) -> int | None:
@@ -325,7 +325,7 @@ class IndexBrowser(QWidget):
         return out
 
     def refresh_status(self) -> None:
-        """Status und Farben nach Aenderung der Referenz neu berechnen, Auswahl bleibt."""
+        """Recompute status and colors after reference change; selection stays."""
         self._loading = True
         table = self._table
         table.setUpdatesEnabled(False)

@@ -15,16 +15,16 @@ ROWS = [
     {"t": 123500, "id": 0x680, "data": bytes.fromhex("3100fa01120000"), "tx": True},
 ]
 
-# Langlayout mit Switch 0xF8 (Minimum), Index 0x0003, Wert 0x0100
+# long layout with switch 0xF8 (min), index 0x0003, value 0x0100
 ROW_F8 = {"t": 123600, "id": 0x180,
           "data": bytes([0xD2, 0x00, 0xF8, 0x00, 0x03, 0x01, 0x00]), "tx": False}
-# Systemnachricht (msg_type 6), d2 = 0xFE
+# system message (msg_type 6), d2 = 0xFE
 ROW_SYS = {"t": 123700, "id": 0x180,
            "data": bytes([0x06, 0x01, 0xFE, 0x00, 0x00, 0x00, 0x00]), "tx": False}
 
 
 class _FakeDb:
-    """Minimaler ElsterDb-Ersatz: nur die Methoden, die export_io nutzt."""
+    """Minimal ElsterDb stand-in: only the methods export_io uses."""
 
     def signal_name(self, index):
         return f"SIG_{index:04x}"
@@ -49,7 +49,7 @@ def test_csv_header(tmp_path):
     export_io.save_frames_csv(str(path), ROWS)
 
     raw = path.read_bytes()
-    assert raw.startswith(b"\xef\xbb\xbf"), "UTF-8 BOM fehlt"
+    assert raw.startswith(b"\xef\xbb\xbf"), "UTF-8 BOM missing"
 
     text = raw.decode("utf-8-sig")
     reader = csv.reader(text.splitlines(), delimiter=";")
@@ -88,7 +88,7 @@ def test_csv_fa_frame_switch_empty(tmp_path):
     export_io.save_frames_csv(str(path), ROWS[:1], db=_FakeDb())
 
     row = list(csv.reader(path.read_bytes().decode("utf-8-sig").splitlines(), delimiter=";"))[1]
-    assert row[10] == ""                       # 0xFA -> leer
+    assert row[10] == ""                       # 0xFA -> empty
 
 
 def test_csv_system_frame(tmp_path):
@@ -97,7 +97,7 @@ def test_csv_system_frame(tmp_path):
 
     row = list(csv.reader(path.read_bytes().decode("utf-8-sig").splitlines(), delimiter=";"))[1]
     assert row[8] == "6"                       # msg_type system
-    assert row[10] == ""                       # kein Switch bei Systemnachricht
+    assert row[10] == ""                       # no switch for system message
 
 
 def test_csv_without_db_switch_empty(tmp_path):
@@ -170,7 +170,7 @@ def test_scan_csv_switch_column(tmp_path):
     path = tmp_path / "scan.csv"
     items = [
         {"index": 3, "raw": 0x0100, "status": "ok", "switch": 0xF8},
-        {"index": 3, "raw": 0x0100, "status": "ok"},                 # Standard 0xFA
+        {"index": 3, "raw": 0x0100, "status": "ok"},                 # default 0xFA
         {"index": "0x0003", "raw": "0x0100", "status": "ok", "switch": "0xf9"},
         {"index": 3, "raw": 0x0100, "status": "ok", "switch": 0xF7},
     ]
@@ -189,9 +189,9 @@ def test_jsonl_skips_bad_lines(tmp_path):
     content = "\n".join([
         '{"t":1,"id":"0x180","d":"d200fa01120200","tx":false}',
         "das ist kein json",
-        '{"t":2,"id":"0x180","tx":false}',                  # fehlt "d"
-        '{"t":3,"id":"0x180","d":"zz","tx":false}',         # ungueltiger Hex
-        '{"t":"4","id":"0x180","d":"00","tx":false}',       # falscher Typ
+        '{"t":2,"id":"0x180","tx":false}',                  # missing "d"
+        '{"t":3,"id":"0x180","d":"zz","tx":false}',         # invalid hex
+        '{"t":"4","id":"0x180","d":"00","tx":false}',       # wrong type
         "",
         '{"t":5,"id":"0x181","d":"0102","tx":true}',
     ]) + "\n"

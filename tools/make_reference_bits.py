@@ -1,5 +1,5 @@
-"""Erzeugt referenz/ElsterTable_bits.json: Referenz + BETRIEBS_STATUS (0x0176) und BETRIEBS_STATUS_WPLA (0x4eef) als Bitfeld.
-Das Original in referenzen/elster_reference/ wird nur gelesen.
+"""Generates referenz/ElsterTable_bits.json: reference + BETRIEBS_STATUS (0x0176) and BETRIEBS_STATUS_WPLA (0x4eef) as bit fields.
+The original in referenzen/elster_reference/ is only read.
 """
 import os
 import sys
@@ -16,8 +16,8 @@ BITS = [
     {"bit": 14, "name": "WARMWASSER", "confirmed": True},
 ]
 
-# BETRIEBS_STATUS_WPLA (0x4eef, Owner 0x480). Quelle kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml.
-WPLA_CONFIRMED = {0, 4, 6}  # gemessen 0x0051 Heizen 2026-10-20
+# BETRIEBS_STATUS_WPLA (0x4eef, owner 0x480). Source kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml.
+WPLA_CONFIRMED = {0, 4, 6}  # measured 0x0051 heating 2026-10-20
 WPLA_NAMES = [
     "HEIZKREISPUMPE_1", "HEIZKREISPUMPE_2", "AUFHEIZPROGRAMM", "NHZ_STUFEN_IN_BETRIEB",
     "WP_IM_HEIZBETRIEB", "WP_IM_WW_BETRIEB", "VERDICHTER_IN_BETRIEB", "SOMMERBETRIEB_AKTIV",
@@ -30,8 +30,8 @@ for _bit, _name in enumerate(WPLA_NAMES):
         _entry["comment"] = "Quelle kr0ner, am Display noch nicht geprueft"
     BITS_WPLA.append(_entry)
 
-# Namen aus Upstream-Branch feat/v2.5-community-findings (Stand 2026-10-29), nur wo der Wert auf unserem Bus plausibel ist.
-# (Index, Name, Typ, Owner, unser Wert / Bereich). Siehe plan/v25-branch-indexabgleich-2026-10-29.md
+# Names from upstream branch feat/v2.5-community-findings (as of 2026-10-29), only where the value is plausible on our bus.
+# (index, name, type, owner, our value / range). See plan/v25-branch-indexabgleich-2026-10-29.md
 V25_NEW = [
     (0x0022, "WW_HYSTERESE", "et_dec_val", 0x180, "5.0, 1.0..15.0"),
     (0x0658, "SENSORABGLEICH_VORLAUF_WP", "et_dec_val", 0x480, "0.0, -5.0..5.0"),
@@ -75,7 +75,7 @@ V25_NEW = [
     (0xABE1, "EVU_SPERRE", "et_default", 0x514, "0/1"),
     (0xFDB1, "VERDICHTER_STILLSTAND", "et_little_endian", 0x180, "10 (0x0a00)"),
 ]
-# Bereits bei uns benannt: eigener Name bleibt, Upstream-Name nur als Kommentar.
+# Already named on our side: own name stays, upstream name only as comment.
 V25_ALIAS = {
     0x4E8A: "REGLERDYNAMIK_HEIZEN", 0x4EA8: "MAXTEMP", 0x4EB0: "SOLLTEMPERATUR", 0x4EB4: "ISTTEMPERATUR",
     0x4EB8: "KOMFORTTEMPERATUR", 0x4EB9: "ECOTEMPERATUR", 0x4FA1: "SOLL_UEBERHITZUNG_SAUGGAS_VERDICHTER",
@@ -88,7 +88,7 @@ V25_ALIAS = {
 def apply_v25(ref: ReferenceModel) -> None:
     for idx, name, typ, owner, val in V25_NEW:
         if ref.signal(idx) is not None:
-            continue  # eigener Name hat Vorrang
+            continue  # own name takes precedence
         sig = ref.upsert_signal(idx, name, typ, owner)
         sig["comment"] = f"Name v2.5-Branch (Upstream), Bus-Wert {val}"
     for idx, up in V25_ALIAS.items():
@@ -105,7 +105,7 @@ def main() -> str:
     ref.upsert_signal(0x0176, "BETRIEBS_STATUS", "et_default", 0x180,
                       "Bitfeld, Wert big-endian (data[5]<<8 | data[6]); Bits siehe 'bits'")
     ref.set_bits(0x0176, BITS, owner=0x180)
-    # Quelle: kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml (Index 0x4eef, Owner 0x480)
+    # Source: kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml (index 0x4eef, owner 0x480)
     ref.upsert_signal(0x4EEF, "BETRIEBS_STATUS_WPLA", "et_default", 0x480,
                       "Bitfeld WPL-A, Wert big-endian; Quelle kr0ner/OneESP32ToRuleThemAll yaml/wpl_a_base.yaml")
     ref.set_bits(0x4EEF, BITS_WPLA, owner=0x480)

@@ -1,4 +1,4 @@
-"""Zeitquelle in tools/latency.py: u (Unix ms) wenn > 0, sonst t (ms seit Boot). Nie gemischt innerhalb eines Paares."""
+"""Time source in tools/latency.py: u (Unix ms) if > 0, otherwise t (ms since boot). Never mixed within a pair."""
 
 import json
 import sys
@@ -18,8 +18,8 @@ def _line(t, tx, d, id_hex, u=None):
     return json.dumps(r)
 
 
-REQ = bytes([0x31, 0x80, 0x10, 0x00, 0x00])   # Request an Member 0x180
-RESP = bytes([0x32, 0x80, 0x10, 0x00, 0x00])  # Antwort von Member 0x180
+REQ = bytes([0x31, 0x80, 0x10, 0x00, 0x00])   # request to member 0x180
+RESP = bytes([0x32, 0x80, 0x10, 0x00, 0x00])  # response from member 0x180
 
 
 def _write(tmp_path, lines):
@@ -57,7 +57,7 @@ def test_latency_u_zero_counts_as_missing(tmp_path):
 
 
 def test_latency_mixed_pair_falls_back_to_t(tmp_path):
-    # Request hat u, Antwort nicht: beide mit t rechnen, auch wenn u-Differenz anders waere
+    # request has u, response does not: both use t, even if the u difference would differ
     path = _write(tmp_path, [
         _line(1000, True, REQ, "600", u=BASE_U),
         _line(1300, False, RESP, "180"),
@@ -67,7 +67,7 @@ def test_latency_mixed_pair_falls_back_to_t(tmp_path):
 
 
 def test_latency_mixed_file_sorted_per_pair(tmp_path):
-    # Erstes Paar mit u, zweites Paar ohne u (alte Zeilen) in derselben Datei
+    # first pair with u, second pair without u (old lines) in the same file
     path = _write(tmp_path, [
         _line(1000, True, REQ, "600", u=BASE_U),
         _line(1100, False, RESP, "180", u=BASE_U + 120),

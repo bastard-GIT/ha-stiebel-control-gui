@@ -1,9 +1,9 @@
-"""Tests fuer die Produktiv-API der MqttBridge (gui/mqtt_client.py, Bus-Analyse).
+"""Tests for the production API of MqttBridge (gui/mqtt_client.py, bus analysis).
 
-Kein Broker: gesendet wird an einen Fake-Client, empfangen per _on_message mit Fake-msg.
-Gilt nur bei fw "prod"; Debug und unbekannte Firmware bleiben beim Praefix stiebel-debug/.
+No broker: messages are sent to a fake client and received via _on_message with a fake msg.
+Applies only to fw "prod"; debug and unknown firmware stay on the stiebel-debug/ prefix.
 
-Ausfuehren: QT_QPA_PLATFORM=offscreen python -I -m pytest -q tests/test_mqtt_prod.py
+Run: QT_QPA_PLATFORM=offscreen python -I -m pytest -q tests/test_mqtt_prod.py
 """
 
 import json
@@ -26,7 +26,7 @@ from mqtt_client import MqttBridge, FW_PROD, FW_DEBUG  # noqa: E402
 # ---------------------------------------------------------------- Fakes
 
 class FakeClient:
-    """Speichert Payloads als dict (JSON-Topics stiebel-debug/...)."""
+    """Stores payloads as dict (JSON topics stiebel-debug/...)."""
 
     def __init__(self):
         self.published = []
@@ -40,7 +40,7 @@ class FakeClient:
 
 
 class RawClient(FakeClient):
-    """Speichert den Rohtext (Produktiv-Topics und Schalter-Payloads)."""
+    """Stores the raw text (production topics and switch payloads)."""
 
     def publish(self, topic, payload, qos=0):
         self.published.append((topic, payload))
@@ -121,7 +121,7 @@ def _result(bridge, topic_suffix, payload):
     bridge._on_message(None, None, msg("heatingpump/scan/" + topic_suffix, payload))
 
 
-# ---------------------------------------------------------------- Senden: read
+# ---------------------------------------------------------------- Send: read
 
 def test_send_read_prod_publishes_raw_text(prod):
     bridge, raw = prod
@@ -162,7 +162,7 @@ def test_send_read_prod_fmt_auto_and_src_0x680_allowed(prod):
 @pytest.mark.parametrize("fmt", ["short", "long"])
 def test_send_read_prod_rejects_format(prod, fmt):
     bridge, raw = prod
-    with pytest.raises(ValueError, match="im Produktiv-Modus nicht verfuegbar"):
+    with pytest.raises(ValueError, match="not available in production mode"):
         bridge.send_read(0x514, 0x0013, fmt=fmt)
     assert raw.published == []
 
@@ -176,7 +176,7 @@ def test_send_read_prod_rejects_unknown_format(prod):
 
 def test_send_read_prod_rejects_src(prod):
     bridge, raw = prod
-    with pytest.raises(ValueError, match="im Produktiv-Modus nicht verfuegbar"):
+    with pytest.raises(ValueError, match="not available in production mode"):
         bridge.send_read(0x514, 0x0013, src=0x500)
     assert raw.published == []
 
@@ -202,7 +202,7 @@ def test_send_read_prod_rejects_invalid_switch(prod):
     assert raw.published == []
 
 
-# ---------------------------------------------------------------- Senden: write
+# ---------------------------------------------------------------- Send: write
 
 def test_send_write_prod_publishes_raw_text(prod):
     bridge, raw = prod
@@ -231,7 +231,7 @@ def test_send_write_prod_rejects_pc_member(prod):
     assert raw.published == []
 
 
-# ---------------------------------------------------------------- Senden: Bus-Scan
+# ---------------------------------------------------------------- Send: bus scan
 
 def test_send_scan_prod_payload(prod):
     bridge, raw = prod
@@ -299,7 +299,7 @@ def test_send_stop_prod_publishes_stop(prod):
     assert raw.published == [("heatingpump/scan/stop", "stop")]
 
 
-# ---------------------------------------------------------------- Senden: Member-Scan
+# ---------------------------------------------------------------- Send: member scan
 
 def test_send_member_scan_default_payload(prod):
     bridge, raw = prod
@@ -322,19 +322,19 @@ def test_send_member_scan_rejects_lo_above_hi(prod):
 
 def test_send_member_scan_rejects_debug(debug):
     bridge, client = debug
-    with pytest.raises(ValueError, match="nur Produktiv-Firmware"):
+    with pytest.raises(ValueError, match="production firmware only"):
         bridge.send_member_scan()
     assert client.published == []
 
 
 def test_send_member_scan_rejects_unknown(unknown):
     bridge, client = unknown
-    with pytest.raises(ValueError, match="nur Produktiv-Firmware"):
+    with pytest.raises(ValueError, match="production firmware only"):
         bridge.send_member_scan()
     assert client.published == []
 
 
-# ---------------------------------------------------------------- Debug / unbekannt unveraendert
+# ---------------------------------------------------------------- Debug / unknown unchanged
 
 def test_debug_send_read_uses_cmd_read(debug):
     bridge, client = debug
@@ -497,7 +497,7 @@ def test_connect_failure_does_not_subscribe(unknown):
     assert sub.subscribed == []
 
 
-# ---------------------------------------------------------------- Retained-Gating: Bus-Scan
+# ---------------------------------------------------------------- Retained gating: bus scan
 
 def test_retained_status_and_result_before_scan_are_ignored(prod):
     bridge, _ = prod
@@ -555,7 +555,7 @@ def test_scan_name_match_is_case_insensitive(prod):
 def test_scan_result_wrong_switch_suffix_is_ignored(prod):
     bridge, _ = prod
     sig = collect(bridge)
-    bridge.send_scan(0x180, 0, 0xFF, 200)  # Switch fa
+    bridge.send_scan(0x180, 0, 0xFF, 200)  # switch fa
     _status(bridge, _scan_status("running", member="KESSEL"))
     _result(bridge, "kessel/0x0003/f8", json.dumps({"name": "A", "raw": 1, "value": "1"}))
     assert sig["scan_result"] == []
@@ -651,11 +651,11 @@ def test_broken_scan_status_is_ignored(prod):
     sig = collect(bridge)
     bridge.send_scan(0x180, 0, 0xFF, 200)
     _status(bridge, b"\xff kein json")
-    _status(bridge, json.dumps({"state": "running", "mode": "range", "member": "KESSEL"}))  # ohne Zaehler
+    _status(bridge, json.dumps({"state": "running", "mode": "range", "member": "KESSEL"}))  # without counters
     assert sig["scan_progress"] == []
 
 
-# ---------------------------------------------------------------- Retained-Gating: Member-Scan
+# ---------------------------------------------------------------- Retained gating: member scan
 
 def test_member_scan_running_then_results(prod):
     bridge, _ = prod
@@ -729,7 +729,7 @@ def test_member_result_with_bad_index_is_ignored(prod):
     assert sig["member_result"] == []
 
 
-# ---------------------------------------------------------------- Scan-Zustand loeschen
+# ---------------------------------------------------------------- Clear scan state
 
 def test_disconnect_clears_scan(prod):
     bridge, _ = prod
@@ -767,7 +767,7 @@ def test_stale_scan_after_disconnect_is_ignored(prod):
     assert sig["scan_progress"] == []
 
 
-# ---------------------------------------------------------------- Empfang: Fehler
+# ---------------------------------------------------------------- Receive: errors
 
 def test_prod_scan_status_broken_fields_not_emitted(prod):
     bridge, _ = prod

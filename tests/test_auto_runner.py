@@ -1,6 +1,6 @@
-"""Tests fuer gui/auto_runner.py. Kein Broker: der Transport ist ein Fake.
+"""Tests for gui/auto_runner.py. No broker: the transport is a fake.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_auto_runner.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_auto_runner.py -q
 """
 
 import copy
@@ -33,7 +33,7 @@ def make_log(buf: io.StringIO) -> logging.Logger:
 
 
 class FakeTransport:
-    """Simuliert ein Geraet mit Membern 0x180 und 0x201 (plus stummer Absender 0x100)."""
+    """Simulates a device with members 0x180 and 0x201 (plus silent sender 0x100)."""
 
     def __init__(self, members=(0x180, 0x201), silent=(0x100,), statuses=(),
                  online=True, offline_on_first_scan=False, scan_answers=None,
@@ -42,11 +42,11 @@ class FakeTransport:
         self.silent = list(silent)
         self.statuses = list(statuses)
         self.offline_on_first_scan = offline_on_first_scan
-        # (member, index, switch) -> raw fuer cmd/read; sonst 0x0001
+        # (member, index, switch) -> raw for cmd/read; otherwise 0x0001
         self.minmax = dict(minmax or {})
-        # True: read/result und scan/result ohne switch-Feld (aeltere Firmware)
+        # True: read/result and scan/result without switch field (older firmware)
         self.omit_switch = omit_switch
-        # IDs, die auf cmd/scan antworten (Standard: nur die Member). 0x100 antwortet nicht.
+        # IDs that respond to cmd/scan (default: only the members). 0x100 does not respond.
         self.scan_answers = set(self.members if scan_answers is None else scan_answers)
         self.q: deque = deque()
         if online:
@@ -105,7 +105,7 @@ class FakeTransport:
                     items.append({"index": ar.hex_index(i), "raw": "0x0001", "status": "ok"})
                 else:
                     items.append({"index": ar.hex_index(i), "raw": "0x8000", "status": "unsupported"})
-        # Wie die Firmware: Chunks zu 32 Items, dann der done-Progress
+        # Like the firmware: chunks of 32 items, then the done progress
         sw_field = {} if self.omit_switch else {"switch": ar.switch_state(
             ar.parse_switch(p.get("switch")))}
         for k in range(0, len(items), 32):
@@ -146,11 +146,11 @@ def run_fake(tmp_path, transport, *, state=None, smoke=True, timing=FAST, name="
 
 
 # ----------------------------------------------------------------------
-# Task-Planung
+# Task planning
 # ----------------------------------------------------------------------
 def test_plan_counts_and_ranges_full():
     tasks = ar.plan_tasks([0x180, 0x201])
-    # pro Member: A1 1, A2 1, B 1, C 3, D 15 (Teile zu je max. 0x1000)
+    # per member: A1 1, A2 1, B 1, C 3, D 15 (parts of max. 0x1000 each)
     assert len(tasks) == 2 * (1 + 1 + 1 + 3 + 15)
     for t in tasks:
         size = ar.parse_hex(t["to"]) - ar.parse_hex(t["from"]) + 1
@@ -172,7 +172,7 @@ def test_plan_covers_full_range_once_per_member():
     tasks = ar.plan_tasks(members)
     seen = []
     for t in tasks:
-        if t["stage"] == "A2":  # A2 deckt 0x0000-0x00FF erneut ab (Langformat)
+        if t["stage"] == "A2":  # A2 covers 0x0000-0x00FF again (long format)
             continue
         seen.extend(range(ar.parse_hex(t["from"]), ar.parse_hex(t["to"]) + 1))
     assert sorted(seen) == list(range(0x10000))
@@ -197,7 +197,7 @@ def test_smoke_plan():
 # ----------------------------------------------------------------------
 def test_secrets_parser_quoted_plain_comments():
     text = (
-        "# Kommentar\n"
+        "# comment\n"
         "\n"
         'mqtt_server: "192.0.2.10"\n'
         "mqtt_port: 1883\n"
@@ -233,7 +233,7 @@ def test_broker_config_hides_password_and_errors_leak_nothing(tmp_path):
 
 
 # ----------------------------------------------------------------------
-# State: Roundtrip, atomar, Fortsetzen
+# State: roundtrip, atomic, resume
 # ----------------------------------------------------------------------
 def test_state_roundtrip_atomic(tmp_path):
     state = ar.new_state(100, smoke=True)
@@ -272,7 +272,7 @@ def test_resume_skips_done_tasks(tmp_path):
 
 
 # ----------------------------------------------------------------------
-# Auswertung und Watchdog (rein)
+# Evaluation and watchdog (pure)
 # ----------------------------------------------------------------------
 def test_members_from_probe_and_silent():
     items = [{"id": "0x201", "raw": "0x0001", "status": "ok"},
@@ -316,7 +316,7 @@ def test_bus_safety_decisions():
 
 
 # ----------------------------------------------------------------------
-# Kompletter Durchlauf mit Fake-Transport (--smoke)
+# Complete run with fake transport (--smoke)
 # ----------------------------------------------------------------------
 def test_smoke_full_run(tmp_path):
     fake = FakeTransport(statuses=[{"rx": 0, "tx": 0, "twai_err": 0, "bus_off": False}])
@@ -368,7 +368,7 @@ def test_offline_repeats_scan_task(tmp_path):
     code, _, _ = run_fake(tmp_path, fake, smoke=True)
     assert code == 0
     scans = fake.sent_of("cmd/scan")
-    # erster Versuch abgebrochen, danach wird derselbe Teil-Scan wiederholt
+    # first attempt aborted, then the same partial scan is repeated
     assert len(scans) == 5
     assert scans[0] == scans[1]
 
@@ -392,7 +392,7 @@ def test_log_and_status_contain_no_secret(tmp_path):
 
 
 def test_scan_result_chunks_are_accumulated():
-    # Regression: mehrere scan/result-Chunks pro Teil-Scan duerfen nicht verloren gehen
+    # Regression: multiple scan/result chunks per partial scan must not be lost
     task = ar.plan_tasks([0x180], (("X", "auto", ((0x0000, 0x00FF),)),))[0]
     runner = ar.Runner(None, ar.new_state(100, True), state_path="unused",
                        timing=ar.Timing(), log=__import__("logging").getLogger("t"),
@@ -406,7 +406,7 @@ def test_scan_result_chunks_are_accumulated():
 
 
 # ----------------------------------------------------------------------
-# D-Member-Auswahl, Extra-Member, refine_tasks
+# D member selection, extra members, refine_tasks
 # ----------------------------------------------------------------------
 def test_plan_d_members_limits_stage_d_only():
     tasks = ar.plan_tasks([0x180, 0x201, 0x480], d_members=[0x180, 0x480])
@@ -473,7 +473,7 @@ CUSTOM_STAGES = (
 
 
 def run_custom(tmp_path, fake, *, members, name="auto_c"):
-    """Runner mit kleinen Stufen (A1, D); Probe bereits vorhanden, Member gesetzt."""
+    """Runner with small stages (A1, D); probe already present, members set."""
     buf = io.StringIO()
     state = ar.new_state(100, True)
     state["probe"] = {"index": "0x000b", "items": []}
@@ -495,21 +495,21 @@ def test_extra_member_d_inserted_before_first_d_with_hits(tmp_path):
     assert all(t["done"] for t in tasks)
     d = [t for t in tasks if t["stage"] == "D"]
     assert [t["member"] for t in d] == ["0x100", "0x180"]
-    assert "ohne Antwort" not in buf.getvalue()
-    assert "Stufe D fuer Extra-Member ergaenzt: 1 Teil-Scans" in buf.getvalue()
+    assert "without answer" not in buf.getvalue()
+    assert "Stage D for extra member added: 1 partial scans" in buf.getvalue()
 
 
 def test_extra_member_without_answer_skips_d(tmp_path):
-    fake = FakeTransport()  # 0x100 antwortet nicht auf cmd/scan
+    fake = FakeTransport()  # 0x100 does not respond to cmd/scan
     code, saved, buf = run_custom(tmp_path, fake, members=[0x180])
     assert code == 0
     assert [t["member"] for t in saved["tasks"] if t["stage"] == "A1"] == ["0x100", "0x180"]
     assert [t["member"] for t in saved["tasks"] if t["stage"] == "D"] == ["0x180"]
-    assert "Extra-Member 0x100 ohne Antwort, Stufe D uebersprungen" in buf.getvalue()
+    assert "Extra member 0x100 without answer, stage D skipped" in buf.getvalue()
 
 
 # ----------------------------------------------------------------------
-# Switch (f8/f9) und Min/Max (--minmax)
+# Switch (f8/f9) and min/max (--minmax)
 # ----------------------------------------------------------------------
 def make_runner(tmp_path, fake):
     return ar.Runner(fake, ar.new_state(100, True), state_path=str(tmp_path / "s.json"),
@@ -582,7 +582,7 @@ def test_minmax_reads_f8_and_f9_per_hit(tmp_path):
     minmax_reads = [p for p in fake.sent_of("cmd/read") if p.get("switch")]
     assert len(minmax_reads) == 2 * len(hits)
     assert {p["switch"] for p in minmax_reads} == {"f8", "f9"}
-    # Rereads bleiben Standard-Switch und ohne switch-Feld
+    # rereads stay default switch and without switch field
     assert len(saved["rereads"]) == len(hits)
     assert all("switch" not in r for r in saved["rereads"])
     assert fake.sent[-1] == ("cmd/sniff", {"on": False, "ids": [], "types": []})
@@ -601,7 +601,7 @@ def test_minmax_resume_skips_existing(tmp_path):
     assert code2 == 0
     reads2 = fake2.sent_of("cmd/read")
     assert len([p for p in reads2 if p.get("switch")]) == total - 4
-    assert all(p.get("switch") for p in reads2)  # Rereads waren schon fertig
+    assert all(p.get("switch") for p in reads2)  # rereads were already done
     assert len(ar.load_state(str(state_path2))["minmax"]) == total
 
 
@@ -657,7 +657,7 @@ def test_rx_item_ts_from_u_only_when_positive():
 
 
 # ----------------------------------------------------------------------
-# Produktiv-Modus (--fw prod): Fake-Transport mit publish_text()
+# Production mode (--fw prod): fake transport with publish_text()
 # ----------------------------------------------------------------------
 import prod_api as pa  # noqa: E402
 
@@ -674,10 +674,10 @@ def _status(state, mode, member):
 
 
 class ProdFake:
-    """Produktiv-API ohne Broker: publish_text() antwortet wie die Firmware (Events in die Queue).
+    """Production API without broker: publish_text() replies like the firmware (events into the queue).
 
-    Je Scan wie Firmware: running, Treffer, done. stale: Altlasten (retained), die vor dem
-    eigenen running eintreffen. Es gibt kein publish(): der Produktiv-Modus nutzt nur publish_text.
+    Per scan like the firmware: running, hits, done. stale: leftovers (retained) that arrive
+    before the own running. There is no publish(): production mode only uses publish_text.
     """
 
     def __init__(self, members=(0x180, 0x201), silent=(0x100,), scan_answers=None,
@@ -737,7 +737,7 @@ class ProdFake:
         self.q.append(("scan/status", _status("running", "range", name)))
         if member in self.scan_answers:
             for i in range(lo, hi + 1):
-                if i % 2 == 0:  # Firmware meldet nur Antworten != 0x8000
+                if i % 2 == 0:  # firmware reports only replies != 0x8000
                     self.q.append(("scan/hit", {"name": name, "index": i, "switch": sw,
                                                 "raw": 1, "value": "1"}))
         self.q.append(("scan/status", _status("done", "range", name)))
@@ -810,14 +810,14 @@ def test_prod_smoke_full_run(tmp_path):
     assert [t["stage"] for t in saved["tasks"]] == ["S1", "S1", "S2", "S2"]
     assert all(t["done"] for t in saved["tasks"])
     assert saved["skipped"] == []
-    # Sniff, Probe und Scans nur ueber publish_text, exakte Payloads
+    # Sniff, probe and scans only via publish_text, exact payloads
     assert fake.texts(pa.TOPIC_CAN_DEBUG_SET) == ["on", "off"]
     assert fake.texts(pa.TOPIC_SCAN_MEMBERS) == ["0x170 0x210 0x000b"]
     assert fake.texts(pa.TOPIC_SCAN_START) == SMOKE_STARTS
     s1 = [t for t in saved["tasks"] if t["stage"] == "S1" and t["member"] == "0x180"][0]
     assert [i["index"] for i in s1["items"]] == [ar.hex_index(i) for i in range(0, 0x20, 2)]
     assert all(i["status"] == "ok" and i["raw"] == 1 for i in s1["items"])
-    # Rereads: je Treffer ein raw/read ohne Switch, raw als int
+    # Rereads: one raw/read per hit without switch, raw as int
     hits = ar.collect_hits(saved["tasks"])
     assert len(saved["rereads"]) == len(hits)
     assert all(r["raw"] == 1 and r["status"] == "ok" for r in saved["rereads"])
@@ -842,7 +842,7 @@ def test_prod_stage_a1_skipped_and_reported(tmp_path):
     assert len(a1) >= 2 and all(t["done"] for t in a1)
     assert all(t["skipped"] == ar.PROD_A1_SKIP for t in a1)
     assert saved["skipped"] == [ar.PROD_A1_SKIP]  # ohne Duplikate
-    assert "uebersprungen" in buf.getvalue()
+    assert "skipped" in buf.getvalue()
     d = [t for t in saved["tasks"] if t["stage"] == "D" and t["member"] == "0x180"]
     assert d and all(t["done"] for t in d)
 
@@ -860,7 +860,7 @@ def test_prod_delay_note_when_not_default(tmp_path):
     code, saved, buf = run_prod(tmp_path, ProdFake(), delay_ms=250, name="prod_d")
     assert code == 0
     assert saved["skipped"] == [ar.PROD_DELAY_NOTE]
-    assert "delay_ms ignoriert" in buf.getvalue()
+    assert "delay_ms ignored" in buf.getvalue()
 
 
 def test_prod_default_delay_no_note(tmp_path):
@@ -871,7 +871,7 @@ def test_prod_default_delay_no_note(tmp_path):
 
 def test_prod_retained_altlasten_ignored_in_run(tmp_path):
     stale = [
-        ("scan/status", _status("done", "range", "KESSEL")),  # altes done vor running
+        ("scan/status", _status("done", "range", "KESSEL")),  # old done before running
         ("scan/hit", {"name": "KESSEL", "index": 1, "switch": 0xFA, "raw": 1, "value": "1"}),
         ("scan/hit", {"name": "KESSEL", "index": 2, "switch": 0xF8, "raw": 1, "value": "1"}),
         ("scan/hit", {"name": "BEDIENMODUL_1", "index": 2, "switch": 0xFA, "raw": 1,
@@ -880,7 +880,7 @@ def test_prod_retained_altlasten_ignored_in_run(tmp_path):
     ]
     code, saved, _ = run_prod(tmp_path, ProdFake(stale=stale), smoke=True)
     assert code == 0
-    # Scan lief voll durch (altes done beendet ihn nicht), keine Altlast-Treffer
+    # scan ran fully (old done does not end it), no leftover hits
     s1 = [t for t in saved["tasks"] if t["stage"] == "S1" and t["member"] == "0x180"][0]
     assert [i["index"] for i in s1["items"]] == [ar.hex_index(i) for i in range(0, 0x20, 2)]
     assert all(t["done"] for t in saved["tasks"])
@@ -893,13 +893,13 @@ def test_prod_status_gating_unit():
                        delay_ms=100, prod=True)
     runner._prod_begin("range", "KESSEL", 0xFA)
     runner._dispatch("scan/status", _status("done", "range", "KESSEL"))
-    assert not runner._prod_done  # ohne running ignoriert
+    assert not runner._prod_done  # ignored without running
     runner._dispatch("scan/status", _status("running", "members", ""))
-    assert not runner._prod_armed  # falscher mode
+    assert not runner._prod_armed  # wrong mode
     runner._dispatch("scan/status", _status("running", "range", "SPEICHER"))
-    assert not runner._prod_armed  # falscher Name
+    assert not runner._prod_armed  # wrong name
     runner._dispatch("scan/status", _status("running", "range", "kessel"))
-    assert runner._prod_armed  # Name case-insensitiv
+    assert runner._prod_armed  # name case-insensitive
     runner._dispatch("scan/status", _status("done", "range", "KESSEL"))
     assert runner._prod_done and runner._prod_expect is None and not runner._prod_armed
 
@@ -910,7 +910,7 @@ def test_prod_hit_filter_name_and_switch_unit():
                        delay_ms=100, prod=True)
     runner._prod_begin("range", "KESSEL", 0xFA)
     runner._dispatch("scan/hit", {"name": "KESSEL", "index": 4, "switch": 0xFA,
-                                  "raw": 1, "value": "1"})  # vor running
+                                  "raw": 1, "value": "1"})  # before running
     runner._dispatch("scan/status", _status("running", "range", "KESSEL"))
     runner._dispatch("scan/hit", {"name": "SPEICHER", "index": 6, "switch": 0xFA,
                                   "raw": 1, "value": "1"})
@@ -931,8 +931,8 @@ def test_prod_minmax_f8_f9_values_and_payloads(tmp_path):
     assert all(e["status"] == "ok" and isinstance(e["raw"], int) for e in saved["minmax"])
     raw_reads = fake.texts(pa.TOPIC_RAW_READ)
     assert "0x180 0x0002 f8" in raw_reads and "0x180 0x0002 f9" in raw_reads
-    assert "0x180 0x0002" in raw_reads  # Reread ohne Switch
-    assert "0x180 0x0002 fa" not in raw_reads  # Standard-Switch ohne Feld
+    assert "0x180 0x0002" in raw_reads  # reread without switch
+    assert "0x180 0x0002 fa" not in raw_reads  # default switch without field
 
 
 def test_prod_busy_retried_once(tmp_path):
@@ -941,7 +941,7 @@ def test_prod_busy_retried_once(tmp_path):
     assert code == 0
     assert all(r["status"] == "ok" and r["raw"] == 1 for r in saved["rereads"])
     reads = fake.texts(pa.TOPIC_RAW_READ)
-    assert reads[0] == reads[1]  # zweiter Versuch derselbe Read
+    assert reads[0] == reads[1]  # second attempt, same read
 
 
 def test_prod_busy_twice_reports_busy(tmp_path):
@@ -986,7 +986,7 @@ def test_prod_offline_repeats_scan(tmp_path):
 
 
 def test_prod_debug_path_unchanged(tmp_path):
-    # Debug-Lauf: nur publish() wie bisher, kein publish_text, state fw debug
+    # Debug run: only publish() as before, no publish_text, state fw debug
     code, state_path, _ = run_fake(tmp_path, FakeTransport(), smoke=True)
     assert code == 0
     saved = ar.load_state(str(state_path))
@@ -1026,8 +1026,8 @@ def test_paho_prod_message_parsing():
                                           "switch": "fa", "raw": "0x0001", "status": "ok"}))
     feed(pa.TOPIC_CAN_DEBUG_FRAMES, json.dumps([{"t": 1, "id": "180", "d": "3180100000",
                                                  "tx": False}]))
-    feed(pa.TOPIC_SCAN_STATUS, "kaputt")  # ungueltiges JSON: kein Event
-    feed(pa.PROD_ROOT + "/scan/KESSEL/0x0010/f8", "")  # leere Retained-Nachricht: kein Event
+    feed(pa.TOPIC_SCAN_STATUS, "kaputt")  # invalid JSON: no event
+    feed(pa.PROD_ROOT + "/scan/KESSEL/0x0010/f8", "")  # empty retained message: no event
 
     events = []
     while not transport._queue.empty():

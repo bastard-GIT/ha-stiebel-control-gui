@@ -1,6 +1,6 @@
-"""Tests fuer Bitfeld BETRIEBS_STATUS_WPLA (0x4eef) in gui/elster.py und der generierten Referenz.
+"""Tests for bit field BETRIEBS_STATUS_WPLA (0x4eef) in gui/elster.py and the generated reference.
 
-Ohne Qt, ohne paho. Das Original referenzen/elster_reference/ElsterTable.json wird nie beschrieben.
+No Qt, no paho. The original referenzen/elster_reference/ElsterTable.json is never written.
 """
 import json
 import sys
@@ -44,7 +44,7 @@ def test_builtin_0x0176_unveraendert():
 
 
 def test_generierte_referenz_enthaelt_4eef():
-    assert BITS_JSON.exists(), "referenz/ElsterTable_bits.json fehlt (tools/make_reference_bits.py ausfuehren)"
+    assert BITS_JSON.exists(), "referenz/ElsterTable_bits.json missing (run tools/make_reference_bits.py)"
     table = json.loads(BITS_JSON.read_text(encoding="utf-8"))
     sigs = {int(str(s["index"]), 16): s for s in table["signals"]}
 

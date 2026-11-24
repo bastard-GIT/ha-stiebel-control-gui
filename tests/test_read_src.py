@@ -1,6 +1,6 @@
-"""Tests Absender-ID und Timeout bei cmd/read (INTERFACES 12): Bridge und Abfrage-Tab.
+"""Tests sender ID and timeout for cmd/read (INTERFACES 12): bridge and query tab.
 
-Ausfuehren: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_read_src.py -q
+Run: C:\\temp\\stiebel-Remote\\.venv\\Scripts\\python.exe -I -B -m pytest C:\\temp\\stiebel-Remote\\mk1-debug\\tests\\test_read_src.py -q
 """
 
 import os
@@ -85,7 +85,7 @@ def test_query_tab_rejects_src_equal_member(qapp, db):
     tab._index_edit.setText("0x4f4d")
     tab._on_query()
     assert bridge.reads == []
-    assert "gleich" in tab._hint_label.text()
+    assert "same" in tab._hint_label.text()
 
 
 def test_query_tab_history_shows_src(qapp, db):
@@ -93,4 +93,4 @@ def test_query_tab_history_shows_src(qapp, db):
     tab = tab_query.QueryTab(db, bridge)
     bridge.read_result.emit({"member": 0x100, "index": 0x0199, "switch": 0xFA, "raw": 0x01F6,
                              "status": "ok", "src": 0x700})
-    assert tab._table.item(0, tab_query.HEADERS.index("Modus")).text() == "Lesen von 0x700"
+    assert tab._table.item(0, tab_query.HEADERS.index("Mode")).text() == "Read from 0x700"

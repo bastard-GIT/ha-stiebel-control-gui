@@ -1,13 +1,13 @@
-"""Headless Automatik-Runner fuer mk1-debug (kein Qt, paho-mqtt 1.6.x).
+"""Headless automatic runner for mk1-debug (no Qt, paho-mqtt 1.6.x).
 
-Ablauf und Dateien laut INTERFACES.md Abschnitt 7.3 und 7.5 bzw. Plan
-plan/mk1-debug-auto-plan.md. Aufbau:
-- reine Funktionen (Planung, Secrets, State, Auswertung, Watchdog, Bus-Sicherheit),
-- Klasse Runner mit der Ablaufsteuerung, die nur ueber ein Transport-Objekt
-  mit publish()/poll() mit dem MQTT-Teil spricht,
-- PahoTransport als echte Transport-Schicht (rx-Mitschnitt im paho-Thread).
+Flow and files per INTERFACES.md sections 7.3 and 7.5 resp. plan plan/mk1-debug-auto-plan.md.
+Structure:
+- pure functions (planning, secrets, state, evaluation, watchdog, bus safety),
+- class Runner with the flow control, which only talks to the MQTT part via a transport
+  object with publish()/poll(),
+- PahoTransport as the real transport layer (rx capture in the paho thread).
 
-Zugangsdaten aus secrets.yaml werden nie ausgegeben, geloggt oder in Dateien geschrieben.
+Credentials from secrets.yaml are never printed, logged or written to files.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
-# Mit -I ist das Skriptverzeichnis nicht im sys.path.
+# With -I the script directory is not on sys.path.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mqtt_secrets import SECRETS_PATH, SECRET_KEYS, parse_secrets  # noqa: E402,F401
 import prod_api as pa  # noqa: E402
@@ -51,21 +51,21 @@ EXIT_OK = 0
 EXIT_OFFLINE = 2
 EXIT_BUS = 3
 EXIT_ERROR = 4
-EXIT_INTERRUPTED = 130  # Ctrl+C, zusaetzlich zu 0/2/3/4 aus Plan 7.3
+EXIT_INTERRUPTED = 130  # Ctrl+C, in addition to 0/2/3/4 from plan 7.3
 
 ONLINE_WAIT_S = 300.0
 STALL_S = 60.0
 READ_TIMEOUT_S = 2.0
 REREAD_GAP_S = 60.0
 REREAD_PASSES = 3
-REREAD_SAVE_EVERY = 100  # State-Datei nur alle N Reads schreiben
+REREAD_SAVE_EVERY = 100  # write state file only every N reads
 SMOKE_REREAD_PASSES = 1
 TWAI_ERR_LIMIT = 100
 MIN_DELAY_MS = 100
 DEFAULT_PASSIVE_S = 60.0
-DEFAULT_SECRETS = str(SECRETS_PATH)   # secrets.yaml im Repo-Wurzelordner
+DEFAULT_SECRETS = str(SECRETS_PATH)   # secrets.yaml in the repo root folder
 
-# (Stufe, Format fuer cmd/scan, Bereiche inklusive). Reihenfolge laut Plan Schritt 2.
+# (stage, format for cmd/scan, inclusive ranges). Order per plan step 2.
 FULL_STAGES = (
     ("A1", "short", ((0x0000, 0x00FF),)),
     ("A2", "long", ((0x0000, 0x00FF),)),
@@ -77,33 +77,33 @@ SMOKE_STAGES = (
     ("S1", "auto", ((0x0000, 0x001F),)),
     ("S2", "auto", ((0x00F8, 0x0102),)),
 )
-# Stufe D nur fuer diese Member (Standard, CLI --d-members).
+# Stage D only for these members (default, CLI --d-members).
 D_MEMBERS = (0x180, 0x480, 0x500, 0x514)
-# Zusaetzliche Member (FES, antwortet laut Probe nicht), CLI --extra-members.
+# Additional members (FES, does not respond per probe), CLI --extra-members.
 EXTRA_MEMBERS = (0x100,)
-# Stufen, in denen Extra-Member statisch geplant werden. Stufe D nur dynamisch.
+# Stages in which extra members are planned statically. Stage D only dynamically.
 EXTRA_STAGES = ("A1", "A2", "B", "C")
-# Switch-Bytes (INTERFACES.md 8.1/8.6): 0xFA = aktueller Wert (Standard), 0xF8 = Min, 0xF9 = Max.
+# Switch bytes (INTERFACES.md 8.1/8.6): 0xFA = current value (default), 0xF8 = min, 0xF9 = max.
 SWITCH_DEFAULT = 0xFA
 SWITCH_VALUES = (0xF7, 0xF8, 0xF9, 0xFA)
 MINMAX_SWITCHES = (0xF8, 0xF9)
-# Firmware-Wahl (CLI --fw). prod = Produktiv-API (prod_api.py, Topic-Wurzel heatingpump).
+# Firmware choice (CLI --fw). prod = production API (prod_api.py, topic root heatingpump).
 FW_DEBUG = "debug"
 FW_PROD = "prod"
-BUSY_PAUSE_S = 1.0  # Pause vor der einen Wiederholung nach "busy"
-PROD_A1_SKIP = "format short nicht verfuegbar (Produktiv)"
-PROD_DELAY_NOTE = "delay_ms ignoriert (Produktiv: Firmware-Takt 150 ms)"
+BUSY_PAUSE_S = 1.0  # pause before the one retry after "busy"
+PROD_A1_SKIP = "format short not available (production)"
+PROD_DELAY_NOTE = "delay_ms ignored (production: firmware cycle 150 ms)"
 PROD_TOPICS = (pa.PROD_ROOT + "/status", pa.TOPIC_CAN_DEBUG_FRAMES,
                pa.TOPIC_SCAN_WILDCARD, pa.TOPIC_RAW_RESULT)
 PROD_SUFFIXES = ("scan/status", "scan/hit", "scan/member", "raw/result")
 
 
 class ConfigError(Exception):
-    """Fehler in secrets.yaml. Meldungen enthalten nie Werte."""
+    """Error in secrets.yaml. Messages never contain values."""
 
 
 class RunAbort(Exception):
-    """Lauf abbrechen mit Exit-Code."""
+    """Abort run with exit code."""
 
     def __init__(self, code: int, message: str):
         super().__init__(message)
@@ -111,7 +111,7 @@ class RunAbort(Exception):
 
 
 class _Retry(Exception):
-    """Teil-Scan/Probe/Read nach Offline oder Stall komplett wiederholen."""
+    """Repeat partial scan/probe/read completely after offline or stall."""
 
     def __init__(self, reason: str):
         super().__init__(reason)
@@ -120,7 +120,7 @@ class _Retry(Exception):
 
 @dataclass
 class Timing:
-    """Wartezeiten. Im Test verkuerzbar."""
+    """Wait times. Shortenable in tests."""
 
     passive_s: float = DEFAULT_PASSIVE_S
     gap_s: float = 0.1
@@ -140,7 +140,7 @@ class BrokerConfig:
 
 
 # ----------------------------------------------------------------------
-# Hilfsfunktionen
+# Helper functions
 # ----------------------------------------------------------------------
 def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -155,9 +155,9 @@ def hex_index(value: int) -> str:
 
 
 def parse_hex(value) -> int:
-    """"0x180", "0X180", "180" oder int in int wandeln."""
+    """"0x180", "0X180", "180" or int converted to int."""
     if isinstance(value, bool):
-        raise TypeError("bool ist kein Hex-Wert")
+        raise TypeError("bool is not a hex value")
     if isinstance(value, int):
         return value
     return int(str(value).strip(), 16)
@@ -171,27 +171,27 @@ def _as_int(value, default):
 
 
 def parse_switch(value) -> int:
-    """Switch aus einem Feld ("fa", "0xf8", int; fehlt/None = 0xFA). Sonst ValueError."""
+    """Switch from a field ("fa", "0xf8", int; missing/None = 0xFA). Otherwise ValueError."""
     if value is None:
         return SWITCH_DEFAULT
     sw = parse_hex(value)
     if sw not in SWITCH_VALUES:
-        raise ValueError(f"ungueltiger switch: {value}")
+        raise ValueError(f"invalid switch: {value}")
     return sw
 
 
 def switch_cmd(sw: int) -> str:
-    """Switch fuer cmd/scan und cmd/read: "f8"."""
+    """Switch for cmd/scan and cmd/read: "f8"."""
     return f"{sw:02x}"
 
 
 def switch_state(sw: int) -> str:
-    """Switch fuer _state.json: "0xf8"."""
+    """Switch for _state.json: "0xf8"."""
     return f"0x{sw:02x}"
 
 
 def entry_switch(entry: dict) -> int:
-    """Switch eines Task-, Reread- oder Min/Max-Eintrags; fehlt = 0xFA."""
+    """Switch of a task, reread or min/max entry; missing = 0xFA."""
     return parse_switch(entry.get("switch"))
 
 
@@ -203,11 +203,11 @@ def load_broker_config(path: str) -> BrokerConfig:
         values = parse_secrets(fh.read())
     missing = [k for k in SECRET_KEYS if k not in values]
     if missing:
-        raise ConfigError(f"secrets.yaml: fehlende Schluessel: {', '.join(missing)}")
+        raise ConfigError(f"secrets.yaml: missing keys: {', '.join(missing)}")
     try:
         port = int(values["mqtt_port"])
     except ValueError:
-        raise ConfigError("secrets.yaml: mqtt_port ist keine Zahl") from None
+        raise ConfigError("secrets.yaml: mqtt_port is not a number") from None
     return BrokerConfig(
         host=values["mqtt_server"],
         port=port,
@@ -217,10 +217,10 @@ def load_broker_config(path: str) -> BrokerConfig:
 
 
 # ----------------------------------------------------------------------
-# Planung
+# Planning
 # ----------------------------------------------------------------------
 def split_range(lo: int, hi: int, size: int = PAGE) -> list[tuple[int, int]]:
-    """Bereich [lo, hi] (inklusive) in Teil-Bereiche mit hoechstens `size` Indizes teilen."""
+    """Split range [lo, hi] (inclusive) into sub-ranges of at most `size` indices."""
     out = []
     cur = lo
     while cur <= hi:
@@ -231,7 +231,7 @@ def split_range(lo: int, hi: int, size: int = PAGE) -> list[tuple[int, int]]:
 
 
 def build_stage_tasks(stage: str, fmt: str, ranges, member: int) -> list[dict]:
-    """Teil-Scans eines Members fuer eine Stufe (Bereiche in Teile zu hoechstens PAGE Indizes)."""
+    """Partial scans of one member for one stage (ranges split into parts of at most PAGE indices)."""
     out = []
     for lo, hi in ranges:
         for clo, chi in split_range(lo, hi):
@@ -249,9 +249,9 @@ def build_stage_tasks(stage: str, fmt: str, ranges, member: int) -> list[dict]:
 
 
 def plan_tasks(members: list[int], stages=FULL_STAGES, d_members=None) -> list[dict]:
-    """Task-Liste: Stufe -> Member -> Bereich -> Teil-Scan. Reihenfolge wie Plan Schritt 2.
+    """Task list: stage -> member -> range -> partial scan. Order per plan step 2.
 
-    d_members: Stufe D nur fuer diese Member (None = alle).
+    d_members: stage D only for these members (None = all).
     """
     tasks = []
     for stage, fmt, ranges in stages:
@@ -263,9 +263,9 @@ def plan_tasks(members: list[int], stages=FULL_STAGES, d_members=None) -> list[d
 
 
 def refine_tasks(tasks: list[dict], d_members, extra_members, stages=FULL_STAGES) -> list[dict]:
-    """Idempotent. Entfernt nicht erledigte D-Tasks fremder Member (d_members None = nichts entfernen)
-    und ergaenzt fehlende A1/A2/B/C-Tasks der Extra-Member direkt hinter der letzten Task ihrer Stufe.
-    Erledigte Tasks bleiben unberuehrt. Leere Liste bleibt leer (Planung erfolgt vorher).
+    """Idempotent. Removes unfinished D tasks of foreign members (d_members None = remove nothing)
+    and adds missing A1/A2/B/C tasks of extra members directly after the last task of their stage.
+    Finished tasks stay untouched. Empty list stays empty (planning happens before).
     """
     if not tasks:
         return tasks
@@ -295,7 +295,7 @@ def refine_tasks(tasks: list[dict], d_members, extra_members, stages=FULL_STAGES
 
 
 def members_from_probe(items: list[dict]) -> list[int]:
-    """Member = IDs mit Antwort (ok/unsupported), sortiert, ohne eigene ID."""
+    """Members = IDs that replied (ok/unsupported), sorted, without own ID."""
     ids = set()
     for item in items:
         if item.get("status") in ("ok", "unsupported"):
@@ -305,7 +305,7 @@ def members_from_probe(items: list[dict]) -> list[int]:
 
 
 def passive_senders(frames: list[dict]) -> set[int]:
-    """Absender-IDs aus rx-Frames (tx == false), ohne eigene ID."""
+    """Sender IDs from rx frames (tx == false), without own ID."""
     return {
         int(f["id"])
         for f in frames
@@ -314,12 +314,12 @@ def passive_senders(frames: list[dict]) -> set[int]:
 
 
 def silent_ids(passive: set[int], members: list[int]) -> list[str]:
-    """Passiv gesehene Absender ohne Probe-Antwort."""
+    """Passively seen senders without probe reply."""
     return [hex_member(i) for i in sorted(passive - set(members))]
 
 
 def apply_scan_result(task: dict, payload: dict) -> int:
-    """Items mit ok/unsupported in den Task uebernehmen, Timeouts nur zaehlen. Gibt Anzahl uebernommener Items zurueck."""
+    """Take items with ok/unsupported into the task, only count timeouts. Returns number of items taken."""
     stored = 0
     for item in payload.get("items", []):
         status = item.get("status")
@@ -336,8 +336,8 @@ def apply_scan_result(task: dict, payload: dict) -> int:
 
 
 def collect_hits(tasks: list[dict]) -> list[tuple[str, str]]:
-    """Alle Treffer (status ok) als eindeutige (member, index)-Paare, sortiert.
-    Nur Tasks mit Standard-Switch (0xFA); Min/Max-Werte (0xF8/0xF9) sind keine Treffer fuer Rereads."""
+    """All hits (status ok) as unique (member, index) pairs, sorted.
+    Only tasks with default switch (0xFA); min/max values (0xF8/0xF9) are no hits for rereads."""
     seen = set()
     for task in tasks:
         if entry_switch(task) != SWITCH_DEFAULT:
@@ -350,14 +350,14 @@ def collect_hits(tasks: list[dict]) -> list[tuple[str, str]]:
 
 
 # ----------------------------------------------------------------------
-# Watchdog und Bus-Sicherheit
+# Watchdog and bus safety
 # ----------------------------------------------------------------------
 def stalled(last_progress: float, now: float, stall_s: float) -> bool:
     return now - last_progress > stall_s
 
 
 def bus_problem(prev_twai_err: int | None, status: dict) -> str | None:
-    """`bus_off` true oder twai_err-Anstieg > TWAI_ERR_LIMIT zur letzten Status-Meldung."""
+    """`bus_off` true or twai_err increase > TWAI_ERR_LIMIT relative to the last status message."""
     if bool(status.get("bus_off")):
         return "bus_off"
     err = _as_int(status.get("twai_err"), None)
@@ -388,7 +388,7 @@ def new_state(delay_ms: int, smoke: bool, fw: str = FW_DEBUG) -> dict:
 
 
 def save_state(path: str, state: dict) -> None:
-    """Atomar schreiben: tmp-Datei, dann os.replace."""
+    """Write atomically: tmp file, then os.replace."""
     tmp = f"{path}.tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(state, fh, indent=2, ensure_ascii=False)
@@ -402,15 +402,15 @@ def load_state(path: str) -> dict:
     with open(path, encoding="utf-8") as fh:
         state = json.load(fh)
     if not isinstance(state, dict) or state.get("version") != 1:
-        raise ValueError("unbekannte State-Version")
+        raise ValueError("unknown state version")
     return state
 
 
 # ----------------------------------------------------------------------
-# Ablaufsteuerung
+# Flow control
 # ----------------------------------------------------------------------
 class Runner:
-    """Ablauf Schritt 1 bis 3. Events kommen aus transport.poll(), Befehle gehen per transport.publish()."""
+    """Flow steps 1 to 3. Events come from transport.poll(), commands go via transport.publish()."""
 
     def __init__(self, transport, state: dict, *, state_path: str, timing: Timing,
                  log: logging.Logger, smoke: bool, delay_ms: int, status_fp=None,
@@ -443,27 +443,27 @@ class Runner:
         self._probe_done = False
         self._probe_items: list[dict] = []
         self._read_results: dict[tuple[int, int, int], dict] = {}  # (member, index, switch)
-        # Produktiv-Modus: eigener Scan. expect = {"mode", "name" (klein, None = egal), "switch"}.
-        # Treffer/Member/Status werden erst nach "running" mit passendem mode gewertet.
+        # Production mode: own scan. expect = {"mode", "name" (lowercase, None = any), "switch"}.
+        # Hits/members/status are only counted after "running" with matching mode.
         self._prod_expect: dict | None = None
         self._prod_armed = False
         self._prod_done = False
         self._prod_hits: list[dict] = []
         self._prod_members: list[dict] = []
 
-    # -- Einstieg ------------------------------------------------------
+    # -- Entry ---------------------------------------------------------
     def execute(self) -> int:
-        """Lauf mit Abbruchbehandlung. Gibt Exit-Code zurueck."""
+        """Run with abort handling. Returns exit code."""
         try:
             return self.run()
         except RunAbort as exc:
             self.log.error("%s", exc)
             code = exc.code
         except KeyboardInterrupt:
-            self.log.warning("Ctrl+C: Lauf gestoppt, Zustand gesichert")
+            self.log.warning("Ctrl+C: run stopped, state saved")
             code = EXIT_INTERRUPTED
         except Exception:
-            self.log.exception("Unerwarteter Fehler")
+            self.log.exception("Unexpected error")
             code = EXIT_ERROR
         self._stop()
         return code
@@ -483,7 +483,7 @@ class Runner:
             self._plan()
         st["tasks"] = refine_tasks(st["tasks"], self.d_members, self.extra_members, self.stages)
         if st["tasks"]:
-            self._log_stage_counts("Schritt 2 Tasks je Stufe")
+            self._log_stage_counts("Step 2 tasks per stage")
         self._save()
         self._run_tasks()
         self._rereads()
@@ -492,7 +492,7 @@ class Runner:
         st["finished"] = now_iso()
         self._save()
         self._sniff(False)
-        self.log.info("Automatik fertig")
+        self.log.info("Automatic run finished")
         return EXIT_OK
 
     def _stop(self) -> None:
@@ -507,13 +507,13 @@ class Runner:
         try:
             self._save()
         except OSError as exc:
-            self.log.error("Zustand konnte nicht gesichert werden: %s", exc)
+            self.log.error("State could not be saved: %s", exc)
 
-    # -- Schritt 1 -----------------------------------------------------
+    # -- Step 1 --------------------------------------------------------
     def _step1(self) -> None:
         self._collect_passive = True
         self._passive = set()
-        self.log.info("Schritt 1: passiv sammeln (%s s)", self.timing.passive_s)
+        self.log.info("Step 1: collect passively (%s s)", self.timing.passive_s)
         self._wait_until(lambda: False, self.timing.passive_s, guard=False)
         self._collect_passive = False
         self.state["passive_ids"] = [hex_member(i) for i in sorted(self._passive)]
@@ -523,7 +523,7 @@ class Runner:
                 self._probe()
                 break
             except _Retry as exc:
-                self.log.warning("Probe wird wiederholt (%s)", exc.reason)
+                self.log.warning("Probe is repeated (%s)", exc.reason)
                 self._wait_online()
 
     def _probe(self) -> None:
@@ -541,7 +541,7 @@ class Runner:
                 "delay_ms": self.delay_ms,
             })
             self._wait_until(lambda: self._probe_done, stall=True)
-            # Nachzuegler der letzten probe/result-Chunks abwarten
+            # wait for stragglers of the last probe/result chunks
             self._wait_until(lambda: False, self.timing.read_timeout_s)
             items = list(self._probe_items)
         members = members_from_probe(items)
@@ -549,17 +549,17 @@ class Runner:
         self.state["members"] = [hex_member(m) for m in members]
         self.state["silent"] = silent_ids(self._passive, members)
         self._save()
-        self.log.info("Member gefunden: %d (%s)", len(members),
+        self.log.info("Members found: %d (%s)", len(members),
                       ", ".join(hex_member(m) for m in members))
         if self.state["silent"]:
-            self.log.info("Passiv, ohne Probe-Antwort: %s", ", ".join(self.state["silent"]))
+            self.log.info("Passive, without probe reply: %s", ", ".join(self.state["silent"]))
         if not members:
-            self.log.warning("Keine Member gefunden")
+            self.log.warning("No members found")
 
-    # -- Schritt 2 -----------------------------------------------------
+    # -- Step 2 --------------------------------------------------------
     def _plan(self) -> None:
-        """Schritt 2 planen. Member = Probe-Member + Extra-Member (ohne 0x680).
-        Stufe D nur fuer Probe-Member in d_members; Extra-Member bekommen D dynamisch."""
+        """Plan step 2. Members = probe members + extra members (without 0x680).
+        Stage D only for probe members in d_members; extra members get D dynamically."""
         st = self.state
         base = [parse_hex(m) for m in st["members"]]
         d_static = [m for m in base if self.d_members is None or m in self.d_members]
@@ -568,7 +568,7 @@ class Runner:
         planned = plan_tasks(sorted(set(base) | set(extra_only)), self.stages, d_members=d_static)
         st["tasks"] = [t for t in planned
                        if t["member"] not in extra_hex or t["stage"] in EXTRA_STAGES]
-        self.log.info("Schritt 2: %d Teil-Scans geplant", len(st["tasks"]))
+        self.log.info("Step 2: %d partial scans planned", len(st["tasks"]))
         self._save()
 
     def _log_stage_counts(self, prefix: str) -> None:
@@ -579,8 +579,8 @@ class Runner:
         self.log.info("%s: %s", prefix, ", ".join(f"{n}={counts.get(n, 0)}" for n in names))
 
     def _expand_extra_d(self, tasks: list, pos: int) -> int:
-        """Stufe D fuer Extra-Member mit mindestens einem ok-Treffer (A/B/C) vor tasks[pos] einfuegen.
-        Gibt Anzahl eingefuegter Tasks zurueck. Doppelte Bereiche werden nicht eingefuegt."""
+        """Insert stage D for extra members with at least one ok hit (A/B/C) before tasks[pos].
+        Returns number of inserted tasks. Duplicate ranges are not inserted."""
         d_spec = next((s for s in self.stages if s[0] == "D"), None)
         if d_spec is None:
             return 0
@@ -593,14 +593,14 @@ class Runner:
         for member in extra:
             mhex = hex_member(member)
             if mhex not in hit_members:
-                self.log.info("Extra-Member %s ohne Antwort, Stufe D uebersprungen", mhex)
+                self.log.info("Extra member %s without answer, stage D skipped", mhex)
                 continue
             for task in build_stage_tasks("D", fmt, ranges, member):
                 if (task["member"], task["from"], task["to"]) not in present:
                     new.append(task)
         if new:
             tasks[pos:pos] = new
-            self.log.info("Stufe D fuer Extra-Member ergaenzt: %d Teil-Scans", len(new))
+            self.log.info("Stage D for extra member added: %d partial scans", len(new))
         return len(new)
 
     def _run_tasks(self) -> None:
@@ -617,7 +617,7 @@ class Runner:
                 i += 1
                 continue
             if task["stage"] == "D" and not expanded:
-                expanded = True  # vor dem ersten D-Task einmal pruefen
+                expanded = True  # check once before the first D task
                 if self._expand_extra_d(tasks, i):
                     self._save()
                     task = tasks[i]
@@ -629,11 +629,11 @@ class Runner:
                     self._run_scan_task(task)
                     break
                 except _Retry as exc:
-                    self.log.warning("Teil-Scan %s wird wiederholt (%s)", label, exc.reason)
+                    self.log.warning("Partial scan %s is repeated (%s)", label, exc.reason)
                     task["items"] = []
                     task["timeouts"] = 0
                     self._wait_online()
-            self.log.info("Teil-Scan %d/%d fertig: %s, %d Treffer",
+            self.log.info("Partial scan %d/%d done: %s, %d hits",
                           number, len(tasks), label, len(task["items"]))
             self._save()
             i += 1
@@ -659,22 +659,22 @@ class Runner:
             payload["switch"] = switch_cmd(sw)
         self._publish("cmd/scan", payload)
         self._wait_until(lambda: self._scan_done, stall=True)
-        # Die Firmware schickt scan/result in Chunks zu 32 Items, der letzte Chunk vor dem
-        # done-Progress. Kurz auf Nachzuegler warten, dann alle Chunks uebernehmen.
+        # The firmware sends scan/result in chunks of 32 items, the last chunk before the done progress.
+        # Briefly wait for stragglers, then take over all chunks.
         self._wait_until(lambda: False, self.timing.read_timeout_s / 2, guard=False)
         chunks = self._scan_results.pop(key, [])
         if not chunks:
-            self.log.info("Kein scan/result fuer %s (keine Antworten)", task["member"])
+            self.log.info("No scan/result for %s (no replies)", task["member"])
         for payload in chunks:
             apply_scan_result(task, payload)
         task["done"] = True
 
-    # -- Schritt 3 -----------------------------------------------------
+    # -- Step 3 --------------------------------------------------------
     def _rereads(self) -> None:
         st = self.state
         passes = SMOKE_REREAD_PASSES if self.smoke else REREAD_PASSES
         hits = collect_hits(st["tasks"])
-        self.log.info("Schritt 3: %d Treffer, %d Durchgang/Durchgaenge", len(hits), passes)
+        self.log.info("Step 3: %d hits, %d pass(es)", len(hits), passes)
         last_end = None
         since_save = 0
         for number in range(1, passes + 1):
@@ -683,7 +683,7 @@ class Runner:
             if not todo:
                 continue
             if last_end is not None:
-                self.log.info("Pause bis Durchgang %d (%s s)", number, self.timing.reread_gap_s)
+                self.log.info("Pause until pass %d (%s s)", number, self.timing.reread_gap_s)
                 self._wait_until(lambda: False, self.timing.reread_gap_s, guard=False)
             for member, index in todo:
                 while True:
@@ -691,7 +691,7 @@ class Runner:
                         result = self._read_one(member, index)
                         break
                     except _Retry as exc:
-                        self.log.warning("Read wird wiederholt (%s)", exc.reason)
+                        self.log.warning("Read is repeated (%s)", exc.reason)
                         self._wait_online()
                 st["rereads"].append({
                     "member": member,
@@ -701,7 +701,7 @@ class Runner:
                     "raw": result["raw"],
                     "status": result["status"],
                 })
-                # _state.json ist nach den Scans zig MB gross: nicht nach jedem Read schreiben
+                # _state.json is tens of MB after the scans: do not write after every read
                 since_save += 1
                 if since_save >= REREAD_SAVE_EVERY:
                     self._save()
@@ -709,7 +709,7 @@ class Runner:
             self._save()
             since_save = 0
             last_end = self.clock()
-            self.log.info("Durchgang %d fertig", number)
+            self.log.info("Pass %d done", number)
 
     def _read_one(self, member: str, index: str, switch: int = SWITCH_DEFAULT) -> dict:
         if self.prod:
@@ -728,15 +728,15 @@ class Runner:
         return {"raw": res.get("raw"), "status": res.get("status")}
 
     def _minmax(self) -> None:
-        """Schritt 4 (nur mit --minmax): je Treffer cmd/read mit switch f8 (Min) und f9 (Max).
-        Ergebnisse in state["minmax"]; bereits vorhandene Eintraege werden uebersprungen."""
+        """Step 4 (only with --minmax): per hit cmd/read with switch f8 (min) and f9 (max).
+        Results in state["minmax"]; already existing entries are skipped."""
         st = self.state
         entries = st.setdefault("minmax", [])
         hits = collect_hits(st["tasks"])
         done = {(e["member"], e["index"], entry_switch(e)) for e in entries}
         todo = [(m, i, sw) for m, i in hits for sw in MINMAX_SWITCHES
                 if (m, i, sw) not in done]
-        self.log.info("Min/Max: %d Treffer, %d Reads", len(hits), len(todo))
+        self.log.info("Min/Max: %d hits, %d reads", len(hits), len(todo))
         since_save = 0
         for member, index, sw in todo:
             while True:
@@ -744,7 +744,7 @@ class Runner:
                     result = self._read_one(member, index, sw)
                     break
                 except _Retry as exc:
-                    self.log.warning("Min/Max-Read wird wiederholt (%s)", exc.reason)
+                    self.log.warning("Min/Max read is repeated (%s)", exc.reason)
                     self._wait_online()
             entries.append({
                 "member": member,
@@ -758,22 +758,22 @@ class Runner:
                 self._save()
                 since_save = 0
         self._save()
-        self.log.info("Min/Max fertig")
+        self.log.info("Min/Max done")
 
-    # -- Verbindung / Warten -------------------------------------------
+    # -- Connection / waiting ------------------------------------------
     def _wait_online(self) -> None:
         self.went_offline = False
-        self.log.info("Warte auf availability online")
+        self.log.info("Waiting for availability online")
         if not self._wait_until(lambda: self.online, self.timing.online_wait_s, guard=False):
-            raise RunAbort(EXIT_OFFLINE, "ESP nicht online")
+            raise RunAbort(EXIT_OFFLINE, "ESP not online")
         self._last_progress = self.clock()
         self.log.info("ESP online")
 
     def _wait_until(self, cond, timeout: float | None = None, *,
                     stall: bool = False, guard: bool = True) -> bool:
-        """Events verarbeiten, bis cond() wahr ist oder timeout abläuft.
+        """Process events until cond() is true or timeout expires.
 
-        guard: bei offline-Meldung _Retry werfen. stall: bei 60 s ohne Fortschritt _Retry werfen.
+        guard: raise _Retry on offline message. stall: raise _Retry after 60 s without progress.
         """
         start = self.clock()
         while True:
@@ -788,7 +788,7 @@ class Runner:
             if timeout is not None:
                 remaining = timeout - (now - start)
                 if remaining <= 0:
-                    self._pump(0.0)  # bereits eingegangene Events noch verarbeiten
+                    self._pump(0.0)  # still process events already received
                     return cond()
                 wait = min(wait, remaining)
             self._pump(wait)
@@ -803,7 +803,7 @@ class Runner:
     def _save(self) -> None:
         save_state(self.state_path, self.state)
 
-    # -- Eingehende Nachrichten ----------------------------------------
+    # -- Incoming messages ---------------------------------------------
     def _dispatch(self, suffix: str, data) -> None:
         if self.prod and suffix in PROD_SUFFIXES:
             self._dispatch_prod(suffix, data)
@@ -824,7 +824,7 @@ class Runner:
             if err is not None:
                 self._last_twai = err
             if reason is not None:
-                raise RunAbort(EXIT_BUS, f"Bus-Problem ({reason}), Automatik gestoppt")
+                raise RunAbort(EXIT_BUS, f"Bus problem ({reason}), automatic run stopped")
             return
 
         if suffix == "rx":
@@ -864,7 +864,7 @@ class Runner:
             except (KeyError, TypeError, ValueError):
                 pass
 
-    # -- Produktiv-Modus (prod_api) --------------------------------------
+    # -- Production mode (prod_api) ------------------------------------
     def _send_text(self, topic: str, text: str) -> None:
         self.transport.publish_text(topic, text)
 
@@ -883,7 +883,7 @@ class Runner:
         task["done"] = True
         task["skipped"] = text
         self._note_skipped(text)
-        self.log.warning("Teil-Scan %s %s %s-%s uebersprungen: %s", task["stage"],
+        self.log.warning("Partial scan %s %s %s-%s skipped: %s", task["stage"],
                          task["member"], task["from"], task["to"], text)
         self._save()
 
@@ -907,7 +907,7 @@ class Runner:
 
     def _prod_status(self, data: dict) -> None:
         if self._prod_expect is None:
-            return  # kein eigener Scan aktiv: retained Altlasten ignorieren
+            return  # no own scan active: ignore retained leftovers
         if not self._prod_armed:
             if data.get("state") == "running" and self._prod_match(data.get("mode"),
                                                                    data.get("member")):
@@ -947,7 +947,7 @@ class Runner:
             self._read_results[(data["id"], data["index"], data["switch"])] = data
 
     def _probe_prod(self, lo: int, hi: int) -> list[dict]:
-        """Teilnehmer-Suche per scan/members. Antwort 0x8000 = unsupported (Member antwortet)."""
+        """Member search via scan/members. Reply 0x8000 = unsupported (member responds)."""
         self._prod_begin("members", None, None)
         self._last_progress = self.clock()
         try:
@@ -973,7 +973,7 @@ class Runner:
         finally:
             self._prod_end()
         if not hits:
-            self.log.info("Kein Treffer fuer %s", task["member"])
+            self.log.info("No hit for %s", task["member"])
         for hit in hits:
             task["items"].append({"index": hex_index(hit["index"]), "raw": hit["raw"],
                                   "status": "ok"})
@@ -991,7 +991,7 @@ class Runner:
             res = self._read_results.pop(key, None)
             if res is None or res.get("status") != "busy" or attempt == 2:
                 break
-            self.log.info("Read %s %s busy, Wiederholung", member, index)
+            self.log.info("Read %s %s busy, retrying", member, index)
             self._wait_until(lambda: False, self.timing.busy_pause_s, guard=False)
         self._wait_until(lambda: False, self.timing.gap_s, guard=False)
         if res is None:
@@ -1018,16 +1018,16 @@ def execute(transport, state: dict, *, state_path: str, timing: Timing,
 
 
 # ----------------------------------------------------------------------
-# Echte MQTT-Transport-Schicht (paho-mqtt 1.6.x)
+# Real MQTT transport layer (paho-mqtt 1.6.x)
 # ----------------------------------------------------------------------
 class PahoTransport:
-    """publish() sendet; poll() liefert Events (suffix, data). rx-Frames werden im paho-Thread in rx_fp geschrieben.
+    """publish() sends; poll() delivers events (suffix, data). rx frames are written to rx_fp in the paho thread.
 
-    prod=True: Produktiv-API (prod_api), publish_text() sendet Rohtext auf volle Topics,
-    poll() liefert availability, rx, scan/status, scan/hit, scan/member und raw/result.
+    prod=True: production API (prod_api), publish_text() sends raw text to full topics,
+    poll() delivers availability, rx, scan/status, scan/hit, scan/member and raw/result.
     """
 
-    _prod = False  # Klassenstandard, falls ein Objekt ohne __init__ gebaut wird (Tests)
+    _prod = False  # class default, if an object is built without __init__ (tests)
 
     def __init__(self, cfg: BrokerConfig, rx_fp, log: logging.Logger, prod: bool = False):
         self._prod = prod
@@ -1059,7 +1059,7 @@ class PahoTransport:
         self._client.publish(PREFIX + suffix, json.dumps(payload), qos=0)
 
     def publish_text(self, topic: str, text: str) -> None:
-        """Rohtext auf ein volles Topic (Produktiv-Modus)."""
+        """Raw text to a full topic (production mode)."""
         self._client.publish(topic, text, qos=0)
 
     def poll(self, timeout: float) -> list[tuple[str, object]]:
@@ -1076,7 +1076,7 @@ class PahoTransport:
 
     def _on_connect(self, client, userdata, flags, rc):
         if rc != 0:
-            self._log.error("Broker lehnt Verbindung ab (rc=%s)", rc)
+            self._log.error("Broker rejects connection (rc=%s)", rc)
             return
         topics = PROD_TOPICS if self._prod else tuple(PREFIX + t for t in RX_TOPICS)
         for topic in topics:
@@ -1102,7 +1102,7 @@ class PahoTransport:
                 return
             self._queue.put((suffix, data))
         except Exception:
-            self._log.debug("Ungueltige Nachricht ignoriert")
+            self._log.debug("Invalid message ignored")
 
     def _queue_rx(self, data) -> None:
         frames = []
@@ -1166,43 +1166,43 @@ def _parse_member_ids(text: str) -> tuple[int, ...]:
         try:
             value = parse_hex(part)
         except ValueError:
-            raise argparse.ArgumentTypeError(f"keine Hex-ID: {part}") from None
+            raise argparse.ArgumentTypeError(f"not a hex ID: {part}") from None
         if not 0 <= value <= 0x7FF or value == PC_CAN_ID:
-            raise argparse.ArgumentTypeError(f"ungueltige Member-ID: {part}")
+            raise argparse.ArgumentTypeError(f"invalid member ID: {part}")
         out.add(value)
     return tuple(sorted(out))
 
 
 def parse_d_members(text: str):
-    """Hex-IDs kommagetrennt; 'all' = None (Stufe D fuer alle)."""
+    """Hex IDs comma-separated; 'all' = None (stage D for all)."""
     if text.strip().lower() == "all":
         return None
     return _parse_member_ids(text)
 
 
 def parse_extra_members(text: str) -> tuple[int, ...]:
-    """Hex-IDs kommagetrennt; 'none' = keine Extra-Member."""
+    """Hex IDs comma-separated; 'none' = no extra members."""
     if text.strip().lower() == "none":
         return ()
     return _parse_member_ids(text)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description="mk1-debug Automatik (headless)")
-    ap.add_argument("--out", required=True, help="Ausgabeordner")
+    ap = argparse.ArgumentParser(description="mk1-debug automatic run (headless)")
+    ap.add_argument("--out", required=True, help="output folder")
     ap.add_argument("--secrets", default=DEFAULT_SECRETS, help="secrets.yaml")
-    ap.add_argument("--delay", type=int, default=MIN_DELAY_MS, help="Pause zwischen Requests in ms (min. 100)")
-    ap.add_argument("--passive", type=float, default=DEFAULT_PASSIVE_S, help="Sekunden passiv sammeln")
-    ap.add_argument("--resume", metavar="STATE_JSON", help="Lauf an _state.json fortsetzen")
-    ap.add_argument("--smoke", action="store_true", help="Kurztest mit kleinen Bereichen")
+    ap.add_argument("--delay", type=int, default=MIN_DELAY_MS, help="pause between requests in ms (min. 100)")
+    ap.add_argument("--passive", type=float, default=DEFAULT_PASSIVE_S, help="seconds to collect passively")
+    ap.add_argument("--resume", metavar="STATE_JSON", help="resume run from _state.json")
+    ap.add_argument("--smoke", action="store_true", help="short test with small ranges")
     ap.add_argument("--d-members", type=parse_d_members, default=D_MEMBERS,
-                    help="Stufe D nur fuer diese Member (Hex, kommagetrennt; 'all' = alle)")
+                    help="stage D only for these members (hex, comma-separated; 'all' = all)")
     ap.add_argument("--extra-members", type=parse_extra_members, default=EXTRA_MEMBERS,
-                    help="Extra-Member fuer A1/A2/B/C (Hex, kommagetrennt; 'none' = keine)")
+                    help="extra members for A1/A2/B/C (hex, comma-separated; 'none' = none)")
     ap.add_argument("--minmax", action="store_true",
-                    help="nach den Rereads Min (switch f8) und Max (switch f9) je Treffer lesen")
+                    help="after the rereads, read min (switch f8) and max (switch f9) per hit")
     ap.add_argument("--fw", choices=(FW_DEBUG, FW_PROD), default=FW_DEBUG,
-                    help="Firmware: debug (stiebel-debug) oder prod (Produktiv-API heatingpump)")
+                    help="firmware: debug (stiebel-debug) or prod (production API heatingpump)")
     return ap
 
 
@@ -1233,19 +1233,19 @@ def main(argv=None) -> int:
     try:
         cfg = load_broker_config(args.secrets)
     except (OSError, ConfigError) as exc:
-        log.error("Konfiguration: %s", exc)
+        log.error("Configuration: %s", exc)
         return EXIT_ERROR
 
     if args.resume:
         try:
             state = load_state(args.resume)
         except (OSError, ValueError) as exc:
-            log.error("State nicht lesbar: %s", exc)
+            log.error("State not readable: %s", exc)
             return EXIT_ERROR
         state_path = args.resume
         smoke = bool(state.get("smoke", args.smoke))
         fw = state.get("fw") or FW_DEBUG
-        log.info("Fortsetzen aus %s", state_path)
+        log.info("Resuming from %s", state_path)
     else:
         fw = args.fw
         state = new_state(delay_ms, args.smoke, fw)
@@ -1262,7 +1262,7 @@ def main(argv=None) -> int:
         try:
             transport.connect()
         except Exception as exc:
-            log.error("Broker nicht erreichbar (%s)", type(exc).__name__)
+            log.error("Broker not reachable (%s)", type(exc).__name__)
             return EXIT_ERROR
         return execute(transport, state, state_path=state_path, timing=timing, log=log,
                        smoke=smoke, delay_ms=delay_ms, status_fp=status_fp,
