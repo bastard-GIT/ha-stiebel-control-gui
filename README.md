@@ -1,4 +1,4 @@
-[Deutsch](README.de.md)
+[Deutsch](docs/README.de.md)
 
 # ha-stiebel-control-gui
 

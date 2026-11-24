@@ -1,4 +1,4 @@
-[English](README.md)
+[English](../README.md)
 
 # ha-stiebel-control-gui
 
@@ -76,8 +76,8 @@ Neue Sprache: Schlüsselliste mit `python -I tools/i18n_check.py --keys` ausgebe
 
 ## 8. Hinweis zum Debug-Modus
 
-Der Debug-Firmware-Modus (Topic-Präfix `stiebel-debug/`) ist eine Altlast. Ziel ist die Upstream-API (`heatingpump/…`, Schnittstelle siehe [docs/INTERFACES.md](docs/INTERFACES.md) (englisch), Abschnitt 13).
+Der Debug-Firmware-Modus (Topic-Präfix `stiebel-debug/`) ist eine Altlast. Ziel ist die Upstream-API (`heatingpump/…`, Schnittstelle siehe [docs/INTERFACES.md](INTERFACES.md) (englisch), Abschnitt 13).
 
 ## 9. Lizenz
 
-GPL-3.0, siehe [LICENSE](LICENSE).
+GPL-3.0, siehe [LICENSE](../LICENSE).
