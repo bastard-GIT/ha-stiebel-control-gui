@@ -33,7 +33,7 @@ PySide6 GUI for bus analysis and debug functions of the Stiebel Eltron WPL-A (El
 From the repo root folder:
 
 ```
-python -I gui/elster_gui.py
+python -I main.py
 ```
 
 `-I` is mandatory so that modules from foreign folders are not loaded.

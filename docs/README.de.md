@@ -33,7 +33,7 @@ PySide6-Oberfläche für die Bus-Analyse und Debug-Funktionen der Stiebel Eltron
 Aus dem Repo-Wurzelordner:
 
 ```
-python -I gui/elster_gui.py
+python -I main.py
 ```
 
 `-I` ist Pflicht, damit Module aus fremden Ordnern nicht geladen werden.

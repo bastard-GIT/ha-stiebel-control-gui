@@ -1,6 +1,6 @@
 """Main window of the mk1-debug GUI (INTERFACES.md, section 5.3 elster_gui.py).
 
-Start: .venv\\Scripts\\python.exe -I gui\\elster_gui.py
+Start: python -I main.py (in the repository root)
 MQTT data (host, port, user, password) come from secrets.yaml in the repo root (or $STIEBEL_SECRETS); they are prefilled and editable in the connection dialog, are not saved and not logged.
 """
 
