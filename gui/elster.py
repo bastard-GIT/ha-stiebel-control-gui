@@ -12,6 +12,8 @@ from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 
+from elster_defaults import DEFAULT_CAN_MEMBERS, DEFAULT_OWN_CAN_ID, DEFAULT_TYPES
+
 NOT_SUPPORTED_RAW = 0x8000  # "no value" -> "-255" (except et_double_val/et_triple_val)
 
 SWITCH_LONG = (0xF7, 0xF8, 0xF9, 0xFA)   # data[2] in long layout (INTERFACES 8.1)
@@ -82,17 +84,43 @@ def _hex(value) -> int:
     return int(str(value), 16)
 
 
+def _read_json(path: Path) -> tuple[dict | None, str | None]:
+    """JSON object from path, or (None, short reason). Never raises for file or JSON errors."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return None, "file not found"
+    except OSError as e:
+        return None, f"cannot read: {e.strerror or type(e).__name__}"
+    except json.JSONDecodeError as e:
+        return None, f"invalid JSON: {e.msg}"
+    except UnicodeDecodeError:
+        return None, "invalid JSON: not UTF-8"
+    if not isinstance(data, dict):
+        return None, "not a JSON object"
+    return data, None
+
+
 class ElsterDb:
     def __init__(self, json_path: str | None = None):
-        path = Path(json_path) if json_path else DEFAULT_JSON
-        with open(path, encoding="utf-8") as f:
-            table = json.load(f)
+        self.table_path: Path = Path(json_path) if json_path else DEFAULT_JSON
+        table, error = _read_json(self.table_path)
+        if table is not None and "signals" not in table:
+            table, error = None, "missing key 'signals'"
+        self.table_error: str | None = error
+        self.table_loaded: bool = error is None
+        if table is None:
+            table = {}  # empty table: no signals, built-in members and own ID
 
-        self.members: list[dict] = table["can_members"]
-        self.signals: list[dict] = table["signals"]
+        self.members: list[dict] = list(table.get("can_members", DEFAULT_CAN_MEMBERS))
+        self.signals: list[dict] = table.get("signals", [])
         self.error_list: list[dict] = table.get("error_list", [])
         self.betriebsart_list: list[dict] = table.get("betriebsart_list", [])
-        self.own_can_id: int = _hex(table["frame_format"]["bus"]["own_can_id"])
+        try:
+            self.own_can_id: int = _hex(table["frame_format"]["bus"]["own_can_id"])
+        except (KeyError, TypeError, ValueError):
+            self.own_can_id = DEFAULT_OWN_CAN_ID
 
         self._member_by_id: dict[int, dict] = {}
         for m in self.members:
@@ -183,9 +211,11 @@ def switch_label(switch: int | None) -> str:
 
 @lru_cache(maxsize=1)
 def _lookup_tables() -> tuple[tuple[dict, ...], tuple[dict, ...]]:
-    """betriebsart_list and error_list from the standard table (for decode_value)."""
-    with open(DEFAULT_JSON, encoding="utf-8") as f:
-        table = json.load(f)
+    """betriebsart_list and error_list from the standard table (for decode_value).
+    Table missing or unreadable: both empty (raw display)."""
+    table, _ = _read_json(DEFAULT_JSON)
+    if table is None:
+        return (), ()
     return tuple(table.get("betriebsart_list", [])), tuple(table.get("error_list", []))
 
 
@@ -301,10 +331,12 @@ def build_read_request(member_can_id: int, index: int,
 
 @lru_cache(maxsize=1)
 def _type_table() -> dict[str, dict]:
-    """types from the standard table, name -> entry."""
-    with open(DEFAULT_JSON, encoding="utf-8") as f:
-        table = json.load(f)
-    return {t["name"]: t for t in table.get("types", [])}
+    """types from the standard table, name -> entry. Table missing or without types: DEFAULT_TYPES."""
+    table, _ = _read_json(DEFAULT_JSON)
+    types = table.get("types") if table is not None else None
+    if not types:
+        types = DEFAULT_TYPES
+    return {t["name"]: t for t in types if isinstance(t, dict) and "name" in t}
 
 
 def is_writable(type_name: str) -> bool:

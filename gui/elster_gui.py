@@ -6,6 +6,7 @@ MQTT data (host, port, user, password) come from secrets.yaml in the repo root (
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 
@@ -130,6 +131,17 @@ class MainWindow(QMainWindow):
         bridge.connected.connect(self._on_connected)
         bridge.availability.connect(self._on_availability)
         bridge.firmware_kind.connect(self._on_firmware)
+
+        if not db.table_loaded:
+            self._announce_missing_table()
+
+    def _announce_missing_table(self) -> None:
+        """Tell the user once that the Elster table is missing or broken. Values stay raw."""
+        msg = _("No Elster table found ({reason}). Values are shown raw (hex).").format(
+            reason=f"{self._db.table_path.name}: {self._db.table_error}")
+        self.statusBar().showMessage(msg)
+        # No central log widget in the main window: the module logger writes to stderr.
+        logging.getLogger(__name__).warning(msg)
 
     # ----- Menu ------------------------------------------------------------
 

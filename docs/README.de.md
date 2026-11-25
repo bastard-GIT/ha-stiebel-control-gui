@@ -51,6 +51,8 @@ Der Verbindungsdialog ist mit diesen Werten vorbelegt. Das Passwort wird nicht g
 
 Die Referenztabelle `ElsterTable.json` wird aus der Umgebungsvariable `ELSTER_REFERENCE_JSON` gelesen. Ohne diese Variable sucht die GUI unter `../elster_reference/ElsterTable.json` relativ zum Repo.
 
+Die GUI startet auch ohne Elster-Tabelle (fehlende oder ungültige ElsterTable.json): Die Statusleiste weist darauf hin, Werte werden roh (hex) angezeigt.
+
 ## 5. Funktionen (Tabs)
 
 - **Live** (`tab_live.py`): zeigt CAN-Frames vom ESP in Echtzeit mit Elster-Dekodierung, filterbar nach CAN-ID und Art.

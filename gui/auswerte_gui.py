@@ -56,7 +56,11 @@ class AuswerteWindow(QMainWindow):
         self.resize(1500, 900)
         self._settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
         self.meas = Measurements()
-        self.ref = ReferenceModel(ref_path)
+        try:
+            self.ref = ReferenceModel(ref_path)
+        except (OSError, ValueError) as exc:  # start anyway: empty table, raw values
+            reason = exc.strerror if isinstance(exc, OSError) and exc.strerror else str(exc)
+            self.ref = ReferenceModel.fallback(ref_path, reason)
         self.mkgit = _load_mkgit()
 
         self.browser = IndexBrowser(self.meas, self.ref, self.mkgit)
@@ -194,6 +198,8 @@ class AuswerteWindow(QMainWindow):
             sources=', '.join(self.meas.sources) or '-', count=len(self.meas.indices)))
         parts.append(_("Reference: {name}").format(name=self.ref.path.name)
                      + (_(" *changed*") if self.ref.dirty else ""))
+        if self.ref.load_error:
+            parts.append(_("Reference not loaded ({reason})").format(reason=self.ref.load_error))
         self.statusBar().showMessage("  |  ".join(parts))
         self._act_save.setEnabled(True)
 
