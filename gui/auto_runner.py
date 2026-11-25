@@ -1,4 +1,4 @@
-"""Headless automatic runner for mk1-debug (no Qt, paho-mqtt 1.6.x).
+"""Headless automatic runner for mk1-debug (no Qt, paho-mqtt 2.x).
 
 Flow and files per INTERFACES.md sections 7.3 and 7.5 resp. plan plan/mk1-debug-auto-plan.md.
 Structure:
@@ -1018,7 +1018,7 @@ def execute(transport, state: dict, *, state_path: str, timing: Timing,
 
 
 # ----------------------------------------------------------------------
-# Real MQTT transport layer (paho-mqtt 1.6.x)
+# Real MQTT transport layer (paho-mqtt 2.x)
 # ----------------------------------------------------------------------
 class PahoTransport:
     """publish() sends; poll() delivers events (suffix, data). rx frames are written to rx_fp in the paho thread.
@@ -1035,7 +1035,7 @@ class PahoTransport:
         self._rx = rx_fp
         self._log = log
         self._queue: queue.Queue = queue.Queue()
-        self._client = mqtt.Client(client_id="", clean_session=True)
+        self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="", clean_session=True)
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
         if cfg.user:
@@ -1074,9 +1074,11 @@ class PahoTransport:
             except queue.Empty:
                 return events
 
-    def _on_connect(self, client, userdata, flags, rc):
-        if rc != 0:
-            self._log.error("Broker rejects connection (rc=%s)", rc)
+    def _on_connect(self, client, userdata, connect_flags, reason_code, properties):
+        # paho 2.x: ReasonCode (is_failure); plain int (0 = ok) still accepted.
+        failed = reason_code.is_failure if hasattr(reason_code, "is_failure") else reason_code != 0
+        if failed:
+            self._log.error("Broker rejects connection (%s)", reason_code)
             return
         topics = PROD_TOPICS if self._prod else tuple(PREFIX + t for t in RX_TOPICS)
         for topic in topics:

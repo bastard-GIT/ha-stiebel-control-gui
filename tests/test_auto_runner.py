@@ -17,6 +17,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "gui"))
 
 import auto_runner as ar  # noqa: E402
+from paho.mqtt.packettypes import PacketTypes  # noqa: E402
+from paho.mqtt.reasoncodes import ReasonCode  # noqa: E402
+
+RC_OK = ReasonCode(PacketTypes.CONNACK, "Success")  # paho 2.x on_connect reason_code
+RC_FAIL = ReasonCode(PacketTypes.CONNACK, "Not authorized")
 
 FAST = ar.Timing(passive_s=0, gap_s=0, online_wait_s=0.5, stall_s=0.5,
                  read_timeout_s=0.5, reread_gap_s=0)
@@ -1061,7 +1066,7 @@ def test_paho_subscriptions_and_publish_text():
         transport._prod = prod
         transport._log = logging.getLogger("test-paho-sub")
         transport._client = _Client()
-        transport._on_connect(transport._client, None, None, 0)
+        transport._on_connect(transport._client, None, None, RC_OK, None)
         assert transport._client.subscribed == expected
     assert pa.TOPIC_SCAN_WILDCARD in ar.PROD_TOPICS
 
@@ -1070,6 +1075,22 @@ def test_paho_subscriptions_and_publish_text():
     transport._client = _Client()
     transport.publish_text(pa.TOPIC_SCAN_STOP, "stop")
     assert transport._client.published == [(pa.TOPIC_SCAN_STOP, "stop", 0)]
+
+
+def test_paho_connect_rejected_does_not_subscribe():
+    class _Client:
+        def __init__(self):
+            self.subscribed = []
+
+        def subscribe(self, topic, qos=0):
+            self.subscribed.append(topic)
+
+    transport = object.__new__(ar.PahoTransport)
+    transport._prod = True
+    transport._log = logging.getLogger("test-paho-reject")
+    transport._client = _Client()
+    transport._on_connect(transport._client, None, None, RC_FAIL, None)
+    assert transport._client.subscribed == []
 
 
 def test_paho_debug_ignores_prod_topics():

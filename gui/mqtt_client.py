@@ -1,6 +1,6 @@
 """MQTT bridge for the mk1 debug GUI (interface per INTERFACES.md, sections 5.2 and 8.3).
 
-paho-mqtt 1.6.x: Client(...) without CallbackAPIVersion. paho runs via loop_start
+paho-mqtt 2.x: Client(CallbackAPIVersion.VERSION2, ...), callbacks with reason_code. paho runs via loop_start
 in its own thread; all results go exclusively via Qt signals to the GUI.
 The password is neither stored nor logged.
 
@@ -184,7 +184,7 @@ class MqttBridge(QObject):
         self._clock = ClockSync()
         self._prod_scan = None
         self._set_firmware_kind(FW_UNKNOWN)
-        client = mqtt.Client(client_id="", clean_session=True)
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="", clean_session=True)
         client.on_connect = self._on_connect
         client.on_disconnect = self._on_disconnect
         client.on_message = self._on_message
@@ -399,8 +399,10 @@ class MqttBridge(QObject):
     # ------------------------------------------------------------------
     # paho callbacks (run in the paho thread)
     # ------------------------------------------------------------------
-    def _on_connect(self, client, userdata, flags, rc):
-        if rc == 0:
+    def _on_connect(self, client, userdata, connect_flags, reason_code, properties):
+        # paho 2.x: ReasonCode (is_failure); plain int (0 = ok) still accepted.
+        failed = reason_code.is_failure if hasattr(reason_code, "is_failure") else reason_code != 0
+        if not failed:
             for topic in RX_TOPICS:
                 try:
                     client.subscribe(TOPIC_PREFIX + topic, qos=0)
@@ -412,9 +414,9 @@ class MqttBridge(QObject):
                     client.subscribe(topic, qos=0)
                 except Exception:
                     pass
-        self.connected.emit(rc == 0)
+        self.connected.emit(not failed)
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
         self._prod_scan = None
         self._set_firmware_kind(FW_UNKNOWN)
         self.connected.emit(False)

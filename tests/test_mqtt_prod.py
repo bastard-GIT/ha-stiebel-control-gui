@@ -21,6 +21,11 @@ sys.path.insert(0, str(GUI_DIR))
 
 import mqtt_client  # noqa: E402
 from mqtt_client import MqttBridge, FW_PROD, FW_DEBUG  # noqa: E402
+from paho.mqtt.packettypes import PacketTypes  # noqa: E402
+from paho.mqtt.reasoncodes import ReasonCode  # noqa: E402
+
+RC_OK = ReasonCode(PacketTypes.CONNACK, "Success")  # paho 2.x on_connect reason_code
+RC_FAIL = ReasonCode(PacketTypes.CONNACK, "Not authorized")
 
 
 # ---------------------------------------------------------------- Fakes
@@ -47,7 +52,7 @@ class RawClient(FakeClient):
 
 
 class FakeMqttClass:
-    def __init__(self, client_id="", clean_session=True):
+    def __init__(self, callback_api_version=None, client_id="", clean_session=True):
         self.on_connect = self.on_disconnect = self.on_message = None
 
     def username_pw_set(self, user, password):
@@ -484,7 +489,7 @@ def test_raw_result_invalid_is_ignored(prod, payload):
 def test_prod_subscribes_raw_result_and_scan_wildcard(unknown):
     bridge, _ = unknown
     sub = FakeClient()
-    bridge._on_connect(sub, None, None, 0)
+    bridge._on_connect(sub, None, None, RC_OK, None)
     assert "heatingpump/raw/result" in sub.subscribed
     assert "heatingpump/scan/#" in sub.subscribed
     assert "stiebel-debug/rx" in sub.subscribed
@@ -493,7 +498,7 @@ def test_prod_subscribes_raw_result_and_scan_wildcard(unknown):
 def test_connect_failure_does_not_subscribe(unknown):
     bridge, _ = unknown
     sub = FakeClient()
-    bridge._on_connect(sub, None, None, 5)
+    bridge._on_connect(sub, None, None, RC_FAIL, None)
     assert sub.subscribed == []
 
 

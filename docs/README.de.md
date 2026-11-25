@@ -25,7 +25,7 @@ PySide6-Oberfläche für die Bus-Analyse und Debug-Funktionen der Stiebel Eltron
   pip install pytest
   ```
 
-- Abhängigkeiten laut `gui/requirements.txt`: PySide6, paho-mqtt (1.6.x-API)
+- Abhängigkeiten laut `gui/requirements.txt`: PySide6, paho-mqtt (2.x-API)
 - Referenztabelle `ElsterTable.json` (siehe Abschnitt 4)
 
 ## 3. Start

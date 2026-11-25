@@ -25,7 +25,7 @@ PySide6 GUI for bus analysis and debug functions of the Stiebel Eltron WPL-A (El
   pip install pytest
   ```
 
-- Dependencies per `gui/requirements.txt`: PySide6, paho-mqtt (1.6.x API)
+- Dependencies per `gui/requirements.txt`: PySide6, paho-mqtt (2.x API)
 - Reference table `ElsterTable.json` (see section 4)
 
 ## 3. Start
