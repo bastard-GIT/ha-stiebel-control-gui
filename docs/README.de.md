@@ -49,9 +49,23 @@ Die MQTT-Zugangsdaten stehen in `secrets.yaml` im Repo-Wurzelordner (nicht im Re
 
 Der Verbindungsdialog ist mit diesen Werten vorbelegt. Das Passwort wird nicht gespeichert und nicht geloggt.
 
-Die Referenztabelle `ElsterTable.json` wird aus der Umgebungsvariable `ELSTER_REFERENCE_JSON` gelesen. Ohne diese Variable sucht die GUI unter `../elster_reference/ElsterTable.json` relativ zum Repo.
+Die Referenztabelle `ElsterTable.json` ist im nächsten Unterabschnitt beschrieben.
 
 Die GUI startet auch ohne Elster-Tabelle (fehlende oder ungültige ElsterTable.json): Die Statusleiste weist darauf hin, Werte werden roh (hex) angezeigt.
+
+### Elster-Tabelle
+
+- **Herkunft:** erzeugt aus einer eingecheckten Kopie der Upstream-Quelldateien in [`upstream/`](../upstream/README.md) (Projekt bullitt186/ha-stiebel-control, festgelegt auf Commit `4ec5b3c`, Hashes in `upstream/PIN.json`). Die Dateien sind unverändert; ein Download ist nicht nötig. Lizenzen: LGPL-3.0 für `ElsterTable.h`, GPL-3.0 für das Upstream-Projekt, siehe [NOTICE](../NOTICE).
+- **Erzeugen in der GUI:** **Datei > Elster-Tabelle aus Upstream erzeugen…** Modell wählen, Zieldatei (Vorgabe: `ElsterTable.<Modell>.json` im Konfigordner) und ob Details aus der privaten Tabelle ergänzt werden sollen („Details aus privater Tabelle ergänzen, falls vorhanden“). Der Pfad wird gemerkt. Die GUI danach neu starten, um die neue Tabelle zu nutzen.
+- **Erzeugen auf der Kommandozeile:** `python -I tools/gen_upstream_table.py --model wpla7 --out ElsterTable.wpla7.json`. Außerdem `--list`, `--pin` und `--all --out-dir <Ordner>`.
+- **Suchreihenfolge beim Start:**
+  1. Umgebungsvariable `ELSTER_REFERENCE_JSON`,
+  2. gespeicherter Pfad der zuletzt erzeugten Tabelle (`config.json` im Nutzer-Konfigordner; `STIEBEL_GUI_CONFIG_DIR` ersetzt diesen Ordner),
+  3. private Tabelle `../elster_reference/ElsterTable.json` (optional; `../referenzen/elster_reference/ElsterTable.json` wird ebenfalls geprüft),
+  4. keine: Die GUI startet ohne Tabelle und zeigt Werte roh (hex).
+- **Privates Overlay (optional):** Bei erzeugten Tabellen füllt die private Tabelle die Felder `owner`, `owner_name`, `poll`, `comment` und `bits` dort, wo Upstream sie leer lässt, und ergänzt Signale, die Upstream nicht hat (mit eigenem Namen und Typ). Namen und Typen bleiben Upstream. Pfad: `ELSTER_PRIVATE_JSON` (ist die Variable gesetzt, wird nur dieser Pfad genutzt). Schalter: die Option im Dialog, gespeichert als `table_overlay` in `config.json`.
+- **Dubletten:** haben mehrere Zeilen denselben Index, gewinnt die erste Zeile, wie im C++-Lookup des Upstreams. Die verworfenen Zeilen stehen in `source.duplicates_dropped` der erzeugten Datei.
+- **Pin aktualisieren:** siehe [upstream/README.md](../upstream/README.md).
 
 ## 5. Funktionen (Tabs)
 

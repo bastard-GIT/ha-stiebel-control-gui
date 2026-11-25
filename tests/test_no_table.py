@@ -68,6 +68,12 @@ def _norm_hex_list(values):
     return [int(v, 16) for v in values]
 
 
+@pytest.fixture(autouse=True)
+def _isolated_user_config(tmp_path, monkeypatch):
+    """A real user config (saved table path, overlay flag) must not change these tests."""
+    monkeypatch.setenv("STIEBEL_GUI_CONFIG_DIR", str(tmp_path / "user-config"))
+
+
 # ---------------------------------------------------------------- ElsterDb without table
 
 @pytest.mark.parametrize("kind", list(BAD_TABLES))

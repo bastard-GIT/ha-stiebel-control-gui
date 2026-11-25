@@ -1,0 +1,20 @@
+NOTICE
+
+This repository contains files copied unchanged from the upstream project
+bullitt186/ha-stiebel-control (GPL-3.0), https://github.com/bullitt186/ha-stiebel-control
+
+Vendored files (directory upstream/ha-stiebel-control/):
+- elster/ElsterTable.h
+- model_profile.h
+- can_members.h
+
+Origin: commit 4ec5b3c8ee2dedda328efeec227694280e3f719e, see upstream/PIN.json.
+
+elster/ElsterTable.h is licensed under LGPL-3.0 (see its file header):
+  Copyright (C) 2014 Jürg Müller, CH-5524.
+  Modified by Bastian Stahmer in 2023.
+
+The files are unmodified. This GUI reads them only to generate its Elster table
+(gui/upstream_table.py, tools/gen_upstream_table.py); it does not execute them.
+
+This GUI is licensed under GPL-3.0 (see LICENSE).

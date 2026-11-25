@@ -72,4 +72,6 @@ DEFAULT_TYPES: list[dict] = [
     {"name": "et_dev_nr", "writable": False},
     {"name": "et_err_nr", "writable": False},
     {"name": "et_dev_id", "writable": False},
+    {"name": "et_hours", "writable": False},
+    {"name": "et_err_status", "writable": False},
 ]
