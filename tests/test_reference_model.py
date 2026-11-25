@@ -54,10 +54,12 @@ def _free_index(model) -> int:
 
 # ---- Laden ----
 
-def test_standard_laedt_165_signale_164_echte_indices():
+def test_standard_laedt_testtabelle():
+    # tests/conftest.py sets ELSTER_REFERENCE_JSON to the checked-in excerpt
+    # tests/data/ElsterTable.test.json (4 signals, 3 real indices + sentinel 0x0000).
     m = ReferenceModel()
-    assert len(m.data["signals"]) == 165  # merged reference (2026-11-08)
-    assert len(m.indices()) == 164  # sentinel INDEX_NOT_FOUND not counted
+    assert len(m.data["signals"]) == 4
+    assert len(m.indices()) == 3  # sentinel INDEX_NOT_FOUND (0x0000) not counted
     assert m.dirty is False
     assert m.member_name(0x180) == "KESSEL"
 
