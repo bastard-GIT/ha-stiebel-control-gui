@@ -66,7 +66,7 @@ Die Referenztabelle `ElsterTable.json` wird aus der Umgebungsvariable `ELSTER_RE
 python -I -m pytest tests
 ```
 
-Die Tests laufen ohne Broker; der MQTT-Transport wird durch Fakes ersetzt.
+Die Tests laufen ohne Broker; der MQTT-Transport wird durch Fakes ersetzt. Sie nutzen einen eingecheckten Auszug der Elster-Tabelle (`tests/data/ElsterTable.test.json`, LGPL-3.0, aus ElsterTable.h); eine private Referenzdatei ist nicht nötig.
 
 ## 7. Sprache
 

@@ -66,7 +66,7 @@ The reference table `ElsterTable.json` is read from the environment variable `EL
 python -I -m pytest tests
 ```
 
-The tests run without a broker; the MQTT transport is replaced by fakes.
+The tests run without a broker; the MQTT transport is replaced by fakes. They use a checked-in excerpt of the Elster table (`tests/data/ElsterTable.test.json`, LGPL-3.0, from ElsterTable.h); no private reference file is needed.
 
 ## 7. Language
 
