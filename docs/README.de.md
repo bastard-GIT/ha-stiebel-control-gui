@@ -40,7 +40,7 @@ python -I main.py
 
 ## 4. Zugangsdaten und Referenz
 
-Die MQTT-Zugangsdaten stehen in `secrets.yaml` im Repo-Wurzelordner (nicht im Repo, nie committen). Alternativ Pfad über die Umgebungsvariable `STIEBEL_SECRETS`. Benötigte Schlüssel:
+Die MQTT-Zugangsdaten stehen in `secrets.yaml` im Repo-Wurzelordner (nicht im Repo, nie committen). Alternativ Pfad über die Umgebungsvariable `STIEBEL_SECRETS`. Vorlage: `secrets.example.yaml` nach `secrets.yaml` kopieren und Werte eintragen. Benötigte Schlüssel:
 
 - `mqtt_server`
 - `mqtt_port`
@@ -75,6 +75,12 @@ Die GUI startet auch ohne Elster-Tabelle (fehlende oder ungültige ElsterTable.j
 - **Status** (`tab_status.py`): zeigt Verfügbarkeit, MQTT-Verbindung und den Status der Firmware (Zähler, Ringpuffer, TWAI-Fehler).
 - **Analyse** (`tab_analyse.py`): vergleicht einen Index über mehrere Members und hilft bei der Typwahl.
 - **Index-Browser** (`tab_index_browser.py`): zeigt alle Indizes einer Messung mit Abgleich gegen die Referenz.
+
+### Screenshots
+
+![Tab Live mit CAN-Frames](screenshots/01-live.png)
+
+Die Bilder zeigen synthetische Demo-Daten, keine Live-Verbindung. Beschreibung aller Tabs und Dialoge: [SCREENSHOTS.de.md](SCREENSHOTS.de.md) (Englisch: [SCREENSHOTS.md](SCREENSHOTS.md)).
 
 ## 6. Tests
 

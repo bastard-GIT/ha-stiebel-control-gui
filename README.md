@@ -40,7 +40,7 @@ python -I main.py
 
 ## 4. Credentials and reference
 
-The MQTT credentials are stored in `secrets.yaml` in the repo root folder (not in the repo, never commit). Alternatively, the path can be set via the environment variable `STIEBEL_SECRETS`. Required keys:
+The MQTT credentials are stored in `secrets.yaml` in the repo root folder (not in the repo, never commit). Alternatively, the path can be set via the environment variable `STIEBEL_SECRETS`. Template: copy `secrets.example.yaml` to `secrets.yaml` and fill in your values. Required keys:
 
 - `mqtt_server`
 - `mqtt_port`
@@ -75,6 +75,12 @@ The GUI also starts without an Elster table (missing or invalid ElsterTable.json
 - **Status** (`tab_status.py`): shows availability, MQTT connection and the firmware status (counters, ring buffer, TWAI errors).
 - **Analysis** (`tab_analyse.py`): compares one index across several members and helps choose the type.
 - **Index browser** (`tab_index_browser.py`): shows all indices of a measurement with a comparison against the reference.
+
+### Screenshots
+
+![Live tab with CAN frames](docs/screenshots/01-live.png)
+
+The images show synthetic demo data, not a live connection. Descriptions of all tabs and dialogs: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) (German: [docs/SCREENSHOTS.de.md](docs/SCREENSHOTS.de.md)).
 
 ## 6. Tests
 
