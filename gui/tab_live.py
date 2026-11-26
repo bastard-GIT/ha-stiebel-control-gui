@@ -59,7 +59,7 @@ MODE_LATEST = "last value per index"
 SYSTEM_NAME = "SYSTEM_0xFE"
 SYSTEM_TYPE_NAMES = {6: _("system"), 7: _("system-resp")}
 
-TIME_COLUMNS = (0, 1)        # "Time (ms)" and "Clock time": sort by ts (else t)
+TIME_COLUMNS = (0, 1)        # "Time (ms)": sort by t; "Clock time": sort by ts (else t)
 SORT_ROLE = int(Qt.UserRole) + 1
 PC_HINT = _("PC estimate")      # ts_src == 'pc': timestamp estimated by the PC
 
@@ -84,8 +84,8 @@ def _hex_or_empty(v, fmt: str) -> str:
 
 
 def _time_text(rec: _Rec) -> str:
-    """Column 'Time (ms)': Unix time with 3 decimals if ts, else t."""
-    return str(rec.t) if rec.ts is None else "%.3f" % rec.ts
+    """Column 'Time (ms)': t = ms since ESP boot. The wall-clock time is in 'Clock time'."""
+    return str(rec.t)
 
 
 def _clock_text(rec: _Rec) -> str:
@@ -97,8 +97,13 @@ def _clock_text(rec: _Rec) -> str:
 
 
 def _time_key(rec: _Rec) -> float:
-    """Sort key of the time columns: ts, else t."""
+    """Sort key of 'Clock time': ts, else t."""
     return float(rec.t) if rec.ts is None else rec.ts
+
+
+def _sort_key(rec: _Rec, column: int) -> float:
+    """Sort key of the time columns: column 0 by t, column 1 by ts (else t)."""
+    return float(rec.t) if column == 0 else _time_key(rec)
 
 
 def _decode(db: ElsterDb, seq: int, frame: dict) -> _Rec:
@@ -193,9 +198,9 @@ class FrameTableModel(QAbstractTableModel):
         rec = self._recs[index.row()]
         c = index.column()
         if role == SORT_ROLE:
-            return _time_key(rec) if c in TIME_COLUMNS else None
+            return _sort_key(rec, c) if c in TIME_COLUMNS else None
         if role == Qt.ToolTipRole:
-            if c in TIME_COLUMNS and rec.ts_src == "pc":
+            if c == 1 and rec.ts_src == "pc":
                 return PC_HINT
             return None
         if role != Qt.DisplayRole:

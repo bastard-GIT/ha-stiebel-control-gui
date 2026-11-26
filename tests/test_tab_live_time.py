@@ -65,17 +65,13 @@ def test_time_without_ts_shows_t_and_no_clock(app, db):
     assert model.data(model.index(0, _col("Time (ms)")), Qt.ToolTipRole) is None
 
 
-def test_time_with_ts_shows_unix_seconds_three_decimals(app, db):
+def test_time_with_ts_still_shows_t_in_ms(app, db):
+    # "Time (ms)" always shows t (ms since ESP boot); the wall-clock time is in "Clock time".
     model = _model(db, [F8_TS])
-    assert _cell(model, 0, _col("Time (ms)")) == "1761038123.456"
+    assert _cell(model, 0, _col("Time (ms)")) == "1000"
     assert _cell(model, 0, _col("Clock time")) == _clock(TS)
     assert len(_clock(TS)) == 12  # HH:MM:SS.mmm
     assert model.data(model.index(0, _col("Clock time")), Qt.ToolTipRole) is None
-
-
-def test_ts_three_decimals_padded(app, db):
-    model = _model(db, [dict(F8, ts=1761038123.5)])
-    assert _cell(model, 0, _col("Time (ms)")) == "1761038123.500"
 
 
 def test_pc_source_marks_clock_and_tooltip(app, db):
@@ -83,19 +79,34 @@ def test_pc_source_marks_clock_and_tooltip(app, db):
     idx = model.index(0, _col("Clock time"))
     assert _cell(model, 0, _col("Clock time")) == _clock(TS) + " ~"
     assert model.data(idx, Qt.ToolTipRole) == "PC estimate"
+    # t comes from the ESP, so the "Time (ms)" column has no PC hint
+    assert model.data(model.index(0, _col("Time (ms)")), Qt.ToolTipRole) is None
 
 
-def test_sort_key_numeric_by_ts(app, db):
+def test_sort_clock_column_numeric_by_ts(app, db):
     # Lexicographic order would put "1000.250" before "999.500"; numeric order does not.
     a = dict(F8, t=10, ts=1000.25)
     b = dict(F8, t=5000, ts=999.5)
     model = _model(db, [a, b])
-    assert model.data(model.index(0, 0), tab_live.SORT_ROLE) == 1000.25
+    assert model.data(model.index(0, 1), tab_live.SORT_ROLE) == 1000.25
+    proxy = tab_live._FilterProxy()
+    proxy.setSourceModel(model)
+    proxy.sort(1, Qt.AscendingOrder)
+    order = [model.record(proxy.mapToSource(proxy.index(r, 0)).row()).ts for r in range(2)]
+    assert order == [999.5, 1000.25]
+
+
+def test_sort_time_column_numeric_by_t(app, db):
+    # Column 0 sorts by t, numerically ("999" before "10000"), even when ts says otherwise.
+    a = dict(F8, t=10000, ts=999.5)
+    b = dict(F8, t=999, ts=1000.25)
+    model = _model(db, [a, b])
+    assert model.data(model.index(0, 0), tab_live.SORT_ROLE) == 10000.0
     proxy = tab_live._FilterProxy()
     proxy.setSourceModel(model)
     proxy.sort(0, Qt.AscendingOrder)
-    order = [model.record(proxy.mapToSource(proxy.index(r, 0)).row()).ts for r in range(2)]
-    assert order == [999.5, 1000.25]
+    order = [model.record(proxy.mapToSource(proxy.index(r, 0)).row()).t for r in range(2)]
+    assert order == [999, 10000]
 
 
 def test_sort_key_falls_back_to_t(app, db):
@@ -117,7 +128,8 @@ def test_rows_roundtrip_keeps_ts_and_src(app, db):
 
     again = _model(db, rows)
     assert again.rows() == rows
-    assert _cell(again, 0, _col("Time (ms)")) == "1761038123.456"
+    assert _cell(again, 0, _col("Time (ms)")) == "1000"
+    assert _cell(again, 0, _col("Clock time")) == _clock(TS)
     assert _cell(again, 1, _col("Time (ms)")) == "1040"
 
 
