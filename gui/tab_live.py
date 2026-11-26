@@ -39,7 +39,7 @@ FLUSH_MS = 100
 LATEST_REFRESH_TICKS = 5  # Filter recalculation in "last value" mode every 500 ms
 
 COLUMNS = [
-    _("Time (ms)"),
+    _("ESP uptime (ms)"),
     _("Clock time"),
     _("Direction"),
     _("CAN ID"),
@@ -59,7 +59,7 @@ MODE_LATEST = "last value per index"
 SYSTEM_NAME = "SYSTEM_0xFE"
 SYSTEM_TYPE_NAMES = {6: _("system"), 7: _("system-resp")}
 
-TIME_COLUMNS = (0, 1)        # "Time (ms)": sort by t; "Clock time": sort by ts (else t)
+TIME_COLUMNS = (0, 1)        # "ESP uptime (ms)": sort by t; "Clock time": sort by ts (else t)
 SORT_ROLE = int(Qt.UserRole) + 1
 PC_HINT = _("PC estimate")      # ts_src == 'pc': timestamp estimated by the PC
 
@@ -84,7 +84,7 @@ def _hex_or_empty(v, fmt: str) -> str:
 
 
 def _time_text(rec: _Rec) -> str:
-    """Column 'Time (ms)': t = ms since ESP boot. The wall-clock time is in 'Clock time'."""
+    """Column 'ESP uptime (ms)': t = ms since ESP boot. The wall-clock time is in 'Clock time'."""
     return str(rec.t)
 
 
