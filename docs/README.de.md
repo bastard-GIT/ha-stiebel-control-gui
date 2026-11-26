@@ -78,7 +78,7 @@ Die GUI startet auch ohne Elster-Tabelle (fehlende oder ungültige ElsterTable.j
 
 ### Screenshots
 
-![Tab Live mit CAN-Frames](screenshots/01-live.png)
+![Tab Live mit CAN-Frames](screenshots/de/01-live.png)
 
 Die Bilder zeigen synthetische Demo-Daten, keine Live-Verbindung. Beschreibung aller Tabs und Dialoge: [SCREENSHOTS.de.md](SCREENSHOTS.de.md) (Englisch: [SCREENSHOTS.md](SCREENSHOTS.md)).
 
