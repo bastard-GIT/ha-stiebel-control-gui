@@ -21,6 +21,10 @@ sys.path.insert(0, str(GUI_DIR))
 
 import mqtt_client  # noqa: E402
 from mqtt_client import ClockSync, MqttBridge  # noqa: E402
+from paho.mqtt.packettypes import PacketTypes  # noqa: E402
+from paho.mqtt.reasoncodes import ReasonCode  # noqa: E402
+
+RC_OK = ReasonCode(PacketTypes.CONNACK, "Success")  # paho 2.x on_connect reason_code
 
 
 # ---------------------------------------------------------------- Fakes
@@ -125,7 +129,7 @@ def test_write_result_missing_fields_are_none(bridge_and_client):
 def test_write_result_topic_is_subscribed(bridge_and_client):
     bridge, _ = bridge_and_client
     sub_client = FakeClient()
-    bridge._on_connect(sub_client, None, None, 0)
+    bridge._on_connect(sub_client, None, None, RC_OK, None)
     assert "stiebel-debug/write/result" in sub_client.subscribed
 
 

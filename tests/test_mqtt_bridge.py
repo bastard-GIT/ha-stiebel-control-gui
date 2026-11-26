@@ -28,6 +28,11 @@ import tab_query  # noqa: E402
 import tab_scanner  # noqa: E402
 import tab_status  # noqa: E402
 from elster import ElsterDb  # noqa: E402
+from paho.mqtt.packettypes import PacketTypes  # noqa: E402
+from paho.mqtt.reasoncodes import ReasonCode  # noqa: E402
+
+RC_OK = ReasonCode(PacketTypes.CONNACK, "Success")  # paho 2.x on_connect reason_code
+RC_FAIL = ReasonCode(PacketTypes.CONNACK, "Not authorized")
 
 
 # ---------------------------------------------------------------- Fakes
@@ -264,7 +269,7 @@ def test_subscribes_to_produktiv_availability(bridge_and_client):
         pass
 
     sub_client = Rc0Client()
-    bridge._on_connect(sub_client, None, None, 0)
+    bridge._on_connect(sub_client, None, None, RC_OK, None)
     assert "heatingpump/status" in sub_client.subscribed
     assert "stiebel-debug/availability" in sub_client.subscribed
 
@@ -533,8 +538,9 @@ def test_connect_resets_firmware_to_unknown(bridge_and_client, monkeypatch):
     bridge._on_message(None, None, msg("stiebel-debug/status", {"fw": "debug"}))
 
     class FakeMqtt:
-        def __init__(self, client_id="", clean_session=True):
+        def __init__(self, callback_api_version=None, client_id="", clean_session=True):
             self.on_connect = self.on_disconnect = self.on_message = None
+            FakeMqtt.api_version = callback_api_version
 
         def username_pw_set(self, user, password):
             pass
@@ -555,6 +561,7 @@ def test_connect_resets_firmware_to_unknown(bridge_and_client, monkeypatch):
     bridge.connect_to("broker", 1883, "user", "pw")
     assert kinds == ["debug", "unknown"]
     assert bridge._fw == "unknown"
+    assert FakeMqtt.api_version == mqtt_client.mqtt.CallbackAPIVersion.VERSION2
 
 
 # ---------------------------------------------------------------- Production sniffer (can_debug)
@@ -583,7 +590,7 @@ def test_prod_topic_constants_derive_from_root():
 def test_subscribes_to_can_debug_topics(bridge_and_client):
     bridge, _ = bridge_and_client
     sub_client = FakeClient()
-    bridge._on_connect(sub_client, None, None, 0)
+    bridge._on_connect(sub_client, None, None, RC_OK, None)
     assert "heatingpump/can_debug/frames" in sub_client.subscribed
     assert "heatingpump/can_debug/state" in sub_client.subscribed
     assert "stiebel-debug/rx" in sub_client.subscribed

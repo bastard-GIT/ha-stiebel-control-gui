@@ -122,7 +122,7 @@ def decode_value(type_name: str, raw: int) -> str               # Regeln aus Els
 def build_read_request(member_can_id: int, index: int, db: ElsterDb) -> tuple[int, bytes]   # (0x680, 7 Bytes) nach Abschnitt 2
 ```
 
-### 5.2 `mqtt_client.py` (PySide6.QtCore, paho-mqtt 1.6.x API)
+### 5.2 `mqtt_client.py` (PySide6.QtCore, paho-mqtt 2.x API)
 ```python
 class MqttBridge(QObject):
     connected = Signal(bool)
@@ -176,7 +176,7 @@ paho loop in its own thread (`loop_start`); signals only via Qt signals (thread-
 
 Scan result items: only `ok` and `unsupported` (timeouts are only counted). New fields are additive; existing GUI tabs ignore unknown fields.
 
-### 7.3 `gui/auto_runner.py` (headless, no Qt, paho-mqtt 1.6.x)
+### 7.3 `gui/auto_runner.py` (headless, no Qt, paho-mqtt 2.x)
 CLI: `python -I auto_runner.py --out <dir> [--secrets ../secrets.yaml] [--delay 100] [--passive 60] [--resume <state.json>] [--smoke]`
 - Reads `mqtt_server`, `mqtt_port`, `mqtt_username`, `mqtt_password` from `secrets.yaml` (simple line parser `key: "value"`/`key: value`); never outputs credentials.
 - Files in `--out`, prefix `auto_<YYYYmmdd_HHMMSS>`: `_rx.jsonl` (every rx frame, format like recordings), `_status.jsonl` (every status message with PC time), `_state.json` (progress + all results, written atomically after each chunk: tmp + replace), `_runner.log`.

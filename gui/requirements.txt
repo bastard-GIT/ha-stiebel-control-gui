@@ -1,2 +1,2 @@
 PySide6
-paho-mqtt<2
+paho-mqtt>=2,<3
