@@ -174,6 +174,8 @@
   "Reference changed (not saved)": "Referenz geändert (nicht gespeichert)",
   "Reference saved: {name}": "Referenz gespeichert: {name}",
   "Reference {name} loaded": "Referenz {name} geladen",
+  "No Elster table found ({reason}). Values are shown raw (hex).": "Keine Elster-Tabelle gefunden ({reason}). Werte werden roh (hex) angezeigt.",
+  "Reference not loaded ({reason})": "Referenz nicht geladen ({reason})",
   "Reference: not in reference": "Referenz: nicht in Referenz",
   "Reference: {name}": "Referenz: {name}",
   "Reference: {name} | Type {type} | Owner {owner} | {comment}": "Referenz: {name} | Typ {type} | Eigentümer {owner} | {comment}",

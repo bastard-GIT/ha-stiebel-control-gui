@@ -9,6 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from elster import BUILTIN_BITS, DEFAULT_JSON
+from elster_defaults import DEFAULT_CAN_MEMBERS, DEFAULT_TYPES
 
 
 class ReferenceError(ValueError):
@@ -23,6 +24,22 @@ class ReferenceModel:
         if "signals" not in self.data:
             raise ReferenceError("No reference JSON: key 'signals' is missing")
         self.dirty = False
+        self.load_error: str | None = None
+
+    @classmethod
+    def fallback(cls, path: str | None, error: str) -> "ReferenceModel":
+        """Empty working copy with built-in members and types, used when the reference cannot be loaded.
+        load_error keeps the short reason for the UI."""
+        model = cls.__new__(cls)
+        model.path = Path(path) if path else DEFAULT_JSON
+        model.data = {
+            "signals": [],
+            "types": [dict(t) for t in DEFAULT_TYPES],
+            "can_members": [dict(m) for m in DEFAULT_CAN_MEMBERS],
+        }
+        model.dirty = False
+        model.load_error = error
+        return model
 
     # ---- Lesen ----
     @property
