@@ -1,7 +1,8 @@
 """Screenshots of the main GUI for docs/screenshots/ (offscreen, no broker, no secrets).
 
 Start from the repository root:
-    .venv/Scripts/python.exe -I tools/make_screenshots.py
+    .venv/Scripts/python.exe -I tools/make_screenshots.py          (English, docs/screenshots/)
+    .venv/Scripts/python.exe -I tools/make_screenshots.py --lang de (German, docs/screenshots/de/)
 
 No MQTT connection: MqttBridge.connect_to() is never called. The demo data goes through
 bridge._on_message() (the same hook the tests use), so the same parsers and signals fill the tabs
@@ -20,13 +21,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GUI = ROOT / "gui"
-OUT = ROOT / "docs" / "screenshots"
+LANG = sys.argv[sys.argv.index("--lang") + 1] if "--lang" in sys.argv else "en"
+OUT = ROOT / "docs" / "screenshots" if LANG == "en" else ROOT / "docs" / "screenshots" / LANG
 
 # Environment first: elster reads the table path at import time.
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 # Offscreen has no font database of its own: without this, all text is drawn as boxes.
 os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "Fonts"))
-os.environ["STIEBEL_GUI_LANG"] = "en"
+os.environ["STIEBEL_GUI_LANG"] = LANG
 os.environ["STIEBEL_GUI_CONFIG_DIR"] = "demo-config"      # relative: no user path in the dialog
 os.environ["STIEBEL_SECRETS"] = "none-secrets.yaml"       # does not exist: secrets.yaml is never read
 os.environ["ELSTER_PRIVATE_JSON"] = "none-private.json"   # does not exist: no private overlay
@@ -37,7 +39,8 @@ sys.path.insert(0, str(GUI))
 
 import i18n  # noqa: E402
 
-i18n.set_language("en")
+if not i18n.set_language(LANG):
+    sys.exit(f"unknown language: {LANG}")
 
 import upstream_table  # noqa: E402
 
@@ -241,11 +244,19 @@ def main() -> int:
     grab(app, dlg, "05-dialog-generate-table.png")
     dlg.close()
 
-    # Startup without a table: status bar note, values raw
+    # Startup without a table: status bar note, the same live frames shown raw (hex)
     db_missing = elster.ElsterDb(str(TMP / "ElsterTable.missing.json"), overlay=False)
-    win2 = elster_gui.MainWindow(db_missing, MqttBridge())
+    bridge2 = MqttBridge()
+    win2 = elster_gui.MainWindow(db_missing, bridge2)
     win2.setFixedSize(WIDTH, HEIGHT)
     win2.show()
+    send_status(bridge2, 184213, 2290)
+    feed(bridge2, "heatingpump/status", "online")
+    bridge2.connected.emit(True)  # display only, no broker connection
+    feed(bridge2, "heatingpump/can_debug/state", "on")
+    feed(bridge2, "heatingpump/can_debug/frames", live_frames(t0=100000, cycles=10))
+    win2.live_tab._flush()
+    win2._tabs.setCurrentIndex(0)
     grab(app, win2, "06-start-ohne-tabelle.png")
     win2.close()
 
