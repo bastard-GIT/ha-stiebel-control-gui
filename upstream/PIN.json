@@ -1,0 +1,11 @@
+{
+  "repo": "bullitt186/ha-stiebel-control",
+  "commit": "4ec5b3c8ee2dedda328efeec227694280e3f719e",
+  "date": "2026-11-25T05:00:40+01:00",
+  "base_path": "esphome/ha-stiebel-control",
+  "files": {
+    "elster/ElsterTable.h": "3c19d6975e848675db0855731c5738469ed2c2d782df2aa934ae60cef5e06fc0",
+    "model_profile.h": "804987f801fb982ccd82f48838140ce9acb71825599ecd5e89ef978e6c5459f7",
+    "can_members.h": "da4759962704c8964436c996a2ae7cce42f1d8cb114d3ec733576051bfe5ca1c"
+  }
+}

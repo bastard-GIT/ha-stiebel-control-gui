@@ -49,9 +49,23 @@ The MQTT credentials are stored in `secrets.yaml` in the repo root folder (not i
 
 The connection dialog is pre-filled with these values. The password is neither stored nor logged.
 
-The reference table `ElsterTable.json` is read from the environment variable `ELSTER_REFERENCE_JSON`. Without this variable, the GUI looks under `../elster_reference/ElsterTable.json` relative to the repo.
+The reference table `ElsterTable.json` is described in the next subsection.
 
 The GUI also starts without an Elster table (missing or invalid ElsterTable.json): a note appears in the status bar, and values are shown raw (hex).
+
+### Elster table
+
+- **Origin:** generated from a vendored copy of the upstream sources in [`upstream/`](upstream/README.md) (project bullitt186/ha-stiebel-control, pinned to commit `4ec5b3c`, hashes in `upstream/PIN.json`). The files are unchanged copies; no download is needed. Licenses: LGPL-3.0 for `ElsterTable.h`, GPL-3.0 for the upstream project, see [NOTICE](NOTICE).
+- **Generate in the GUI:** **File > Generate Elster table from upstream…** Choose the model, the target file (default: `ElsterTable.<model>.json` in the config folder) and whether to add details from the private table if found. The path is saved. Restart the GUI to use the new table.
+- **Generate on the command line:** `python -I tools/gen_upstream_table.py --model wpla7 --out ElsterTable.wpla7.json`. Also `--list`, `--pin` and `--all --out-dir <dir>`.
+- **Search order at start:**
+  1. environment variable `ELSTER_REFERENCE_JSON`,
+  2. saved path of the last generated table (`config.json` in the user config folder; `STIEBEL_GUI_CONFIG_DIR` replaces that folder),
+  3. private table `../elster_reference/ElsterTable.json` (optional; `../referenzen/elster_reference/ElsterTable.json` is checked as well),
+  4. none: the GUI starts without a table and shows values raw (hex).
+- **Private overlay (optional):** for generated tables, the private table fills the fields `owner`, `owner_name`, `poll`, `comment` and `bits` where upstream leaves them empty, and adds signals that upstream does not have (with their own name and type). Names and types stay upstream. Path: `ELSTER_PRIVATE_JSON` (if set, only this path is used). Switch: the dialog option, saved as `table_overlay` in `config.json`.
+- **Duplicates:** if several rows have the same index, the first row wins, as in the upstream C++ lookup. The dropped rows are listed in `source.duplicates_dropped` of the generated file.
+- **Pin update:** see [upstream/README.md](upstream/README.md).
 
 ## 5. Functions (tabs)
 

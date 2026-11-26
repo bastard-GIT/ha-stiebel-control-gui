@@ -231,6 +231,32 @@
     "raw": "0x0201",
     "text": "2-01"
    }
+  },
+  {
+   "id": 17,
+   "name": "et_hours",
+   "signed": false,
+   "scale": 1,
+   "decode": "'<Value>' unsigned hours, 0x8000 = not supported",
+   "encode": null,
+   "writable": false,
+   "example": {
+    "raw": "0x0007",
+    "text": "7"
+   }
+  },
+  {
+   "id": 18,
+   "name": "et_err_status",
+   "signed": false,
+   "scale": 1,
+   "decode": "'<Fault name>' from error_list of the high byte; 0 = no fault",
+   "encode": null,
+   "writable": false,
+   "example": {
+    "raw": "0x0000",
+    "text": "0"
+   }
   }
  ],
  "can_members": [

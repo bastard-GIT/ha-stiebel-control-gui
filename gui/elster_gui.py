@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from elster import ElsterDb
+from dialog_upstream_table import UpstreamTableDialog
 from export_io import load_frames_jsonl, save_frames_csv, save_frames_jsonl
 from mqtt_secrets import load_mqtt_settings
 from mqtt_client import FW_DEBUG, FW_PROD, FW_UNKNOWN, MqttBridge
@@ -139,6 +140,7 @@ class MainWindow(QMainWindow):
         """Tell the user once that the Elster table is missing or broken. Values stay raw."""
         msg = _("No Elster table found ({reason}). Values are shown raw (hex).").format(
             reason=f"{self._db.table_path.name}: {self._db.table_error}")
+        msg += " " + _("Use File > Generate Elster table from upstream…")
         self.statusBar().showMessage(msg)
         # No central log widget in the main window: the module logger writes to stderr.
         logging.getLogger(__name__).warning(msg)
@@ -170,6 +172,11 @@ class MainWindow(QMainWindow):
         menu.addAction(act_load)
         menu.addSeparator()
 
+        act_upstream = QAction(_("Generate Elster table from upstream…"), self)
+        act_upstream.triggered.connect(self._on_generate_table)
+        menu.addAction(act_upstream)
+        menu.addSeparator()
+
         act_quit = QAction(_("Quit"), self)
         act_quit.triggered.connect(self.close)
         menu.addAction(act_quit)
@@ -183,6 +190,16 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda _checked=False, c=code: self._on_language(c))
             group.addAction(act)
             lang_menu.addAction(act)
+
+    def _on_generate_table(self) -> None:
+        """Write the table from upstream and activate it. The tabs read the table once at start,
+        so the new one is used after a restart (the path is saved)."""
+        dlg = UpstreamTableDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            dlg.deleteLater()
+            return
+        dlg.deleteLater()
+        self.statusBar().showMessage(_("Restart the GUI to use the new table."))
 
     def _on_language(self, code: str) -> None:
         """Save the choice; it applies at the next start (module constants are translated at import)."""

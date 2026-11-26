@@ -1,6 +1,9 @@
 """Elster protocol for mk1-debug (no Qt, no paho).
 
-Data source: repo bastard-GIT/elster_reference (ElsterTable.json, see default_reference_path).
+Data source: the table ElsterTable.json generated from upstream bullitt186/ha-stiebel-control
+(see default_reference_path; a saved path or ELSTER_REFERENCE_JSON can point elsewhere).
+The private table (ELSTER_PRIVATE_JSON or ../elster_reference/ElsterTable.json) is only an
+overlay for generated tables: it adds owner, names, poll, comment and bits (see ElsterDb).
 Decoding rules as in KElsterTable.cpp (SetValueType, SetDoubleType).
 """
 from __future__ import annotations
@@ -12,6 +15,7 @@ from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 
+import table_config
 from elster_defaults import DEFAULT_CAN_MEMBERS, DEFAULT_OWN_CAN_ID, DEFAULT_TYPES
 
 NOT_SUPPORTED_RAW = 0x8000  # "no value" -> "-255" (except et_double_val/et_triple_val)
@@ -20,21 +24,58 @@ SWITCH_LONG = (0xF7, 0xF8, 0xF9, 0xFA)   # data[2] in long layout (INTERFACES 8.
 REQUEST_SWITCHES = (0xFA, 0xF8, 0xF9)    # valid switch values in request
 SWITCH_LABELS = {0xF7: "f7", 0xF8: "min", 0xF9: "max"}
 
+def _private_candidates() -> tuple[Path, Path]:
+    """Private table locations next to this repo (checked in this order)."""
+    root = Path(__file__).resolve().parents[1]
+    return (root.parent / "elster_reference" / "ElsterTable.json",
+            root.parent / "referenzen" / "elster_reference" / "ElsterTable.json")
+
+
 def default_reference_path() -> Path:
-    """Path to ElsterTable.json: environment variable ELSTER_REFERENCE_JSON, else repo elster_reference
-    next to this repo (../elster_reference)."""
+    """Path of the table to start with. Order:
+    1. environment variable ELSTER_REFERENCE_JSON
+    2. saved path (table_config, only if the file exists)
+    3. private table in ../elster_reference (two candidates, first existing wins)
+    4. otherwise the first candidate (missing file: the GUI starts without a table)."""
     env = os.environ.get("ELSTER_REFERENCE_JSON")
     if env:
         return Path(env)
-    root = Path(__file__).resolve().parents[1]
-    for cand in (root.parent / "elster_reference" / "ElsterTable.json",
-                 root.parent / "referenzen" / "elster_reference" / "ElsterTable.json"):
+    saved = table_config.saved_table_path()
+    if saved is not None:
+        return saved
+    candidates = _private_candidates()
+    for cand in candidates:
         if cand.is_file():
             return cand
-    return root.parent / "elster_reference" / "ElsterTable.json"
+    return candidates[0]
+
+
+def private_reference_path() -> Path | None:
+    """Private overlay table: environment variable ELSTER_PRIVATE_JSON (then only that path),
+    else the private candidates. None if no file exists."""
+    env = os.environ.get("ELSTER_PRIVATE_JSON")
+    if env:
+        path = Path(env)
+        return path if path.is_file() else None
+    for cand in _private_candidates():
+        if cand.is_file():
+            return cand
+    return None
 
 
 DEFAULT_JSON = default_reference_path()
+
+
+def activate_table(path: str | Path) -> None:
+    """Make path the standard table for this process and save it (table_config).
+
+    Updates DEFAULT_JSON and clears the caches of decode_value, encode_value and is_writable.
+    Already created ElsterDb instances keep their table: use ElsterDb.reload()."""
+    global DEFAULT_JSON
+    DEFAULT_JSON = Path(path)
+    _lookup_tables.cache_clear()
+    _type_table.cache_clear()
+    table_config.save_table_path(DEFAULT_JSON)
 
 # Bit fields: index -> [{"bit": n, "name": "...", "confirmed": bool}]. Built-in default (user knowledge
 # from old ESPHome code); a signal of the reference JSON with field "bits" overrides it.
@@ -102,9 +143,38 @@ def _read_json(path: Path) -> tuple[dict | None, str | None]:
     return data, None
 
 
+OVERLAY_FIELDS = ("owner", "owner_name", "poll", "comment", "bits")
+
+
+def _is_generated(table: dict) -> bool:
+    """Generated upstream table: source is an object with 'repo'."""
+    source = table.get("source")
+    return isinstance(source, dict) and "repo" in source
+
+
 class ElsterDb:
-    def __init__(self, json_path: str | None = None):
-        self.table_path: Path = Path(json_path) if json_path else DEFAULT_JSON
+    """Signals, members, error and operating-mode lists of one table file.
+
+    json_path None: default_reference_path(). Missing or broken file: empty table, see table_error.
+    overlay None: table_config.overlay_enabled(). Overlay (see _apply_overlay) only for generated
+    tables. Member, type and bit lookups in the module functions (is_writable, encode_value) still
+    use the standard table DEFAULT_JSON; decode() uses this instance's own lists.
+    """
+
+    def __init__(self, json_path: str | None = None, *, overlay: bool | None = None,
+                 private_json: str | Path | None = None):
+        self._load(Path(json_path) if json_path else DEFAULT_JSON,
+                   overlay=overlay, private_json=private_json)
+
+    def reload(self, json_path: str | Path | None = None, *, overlay: bool | None = None,
+               private_json: str | Path | None = None) -> None:
+        """Load a table into this instance in place (other holders of the instance see the new table).
+        json_path None: the standard table DEFAULT_JSON."""
+        self._load(Path(json_path) if json_path else DEFAULT_JSON,
+                   overlay=overlay, private_json=private_json)
+
+    def _load(self, table_path: Path, *, overlay: bool | None, private_json) -> None:
+        self.table_path: Path = table_path
         table, error = _read_json(self.table_path)
         if table is not None and "signals" not in table:
             table, error = None, "missing key 'signals'"
@@ -114,13 +184,22 @@ class ElsterDb:
             table = {}  # empty table: no signals, built-in members and own ID
 
         self.members: list[dict] = list(table.get("can_members", DEFAULT_CAN_MEMBERS))
-        self.signals: list[dict] = table.get("signals", [])
         self.error_list: list[dict] = table.get("error_list", [])
         self.betriebsart_list: list[dict] = table.get("betriebsart_list", [])
         try:
             self.own_can_id: int = _hex(table["frame_format"]["bus"]["own_can_id"])
         except (KeyError, TypeError, ValueError):
             self.own_can_id = DEFAULT_OWN_CAN_ID
+
+        if overlay is None:
+            overlay = table_config.overlay_enabled()
+        self.overlay_applied: bool = False
+        self.overlay_path: Path | None = None
+        self.overlay_added: int = 0
+        self.overlay_enriched: int = 0
+        self.signals: list[dict] = table.get("signals", [])
+        if table and overlay and _is_generated(table):
+            self._apply_overlay(private_json)
 
         self._member_by_id: dict[int, dict] = {}
         for m in self.members:
@@ -134,6 +213,56 @@ class ElsterDb:
             self._signal_by_index.setdefault(_hex(s["index"]), s)
             if s.get("bits"):
                 self._bits[_hex(s["index"])] = list(s["bits"])
+
+    def _apply_overlay(self, private_json) -> None:
+        """Merge the private table into self.signals (copies, the upstream file is not changed).
+
+        Upstream signals: missing (None) OVERLAY_FIELDS are filled from the private signal with the
+        same index. Names and types stay upstream. Private-only signals are appended with their own
+        name and type. can_members and types of the private table are not used. The private file
+        is only read."""
+        path = Path(private_json) if private_json is not None else private_reference_path()
+        if path is None:
+            return
+        private, _ = _read_json(path)
+        if private is None or not isinstance(private.get("signals"), list):
+            return
+
+        private_by_index: dict[int, dict] = {}
+        for s in private["signals"]:
+            if not isinstance(s, dict) or s.get("sentinel"):
+                continue
+            try:
+                private_by_index.setdefault(_hex(s["index"]), s)
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        merged: list[dict] = []
+        upstream_indices: set[int] = set()
+        for s in self.signals:
+            copy = dict(s)
+            if not s.get("sentinel"):
+                idx = _hex(s["index"])
+                upstream_indices.add(idx)
+                priv = private_by_index.get(idx)
+                if priv is not None:
+                    changed = False
+                    for field in OVERLAY_FIELDS:
+                        if priv.get(field) is not None and copy.get(field) is None:
+                            copy[field] = priv[field]
+                            changed = True
+                    if changed:
+                        self.overlay_enriched += 1
+            merged.append(copy)
+
+        for idx, priv in private_by_index.items():
+            if idx not in upstream_indices:
+                merged.append(dict(priv))
+                self.overlay_added += 1
+
+        self.signals = merged
+        self.overlay_applied = True
+        self.overlay_path = path
 
     def member_by_id(self, can_id: int) -> dict | None:
         return self._member_by_id.get(can_id)
@@ -157,7 +286,7 @@ class ElsterDb:
         if type_name is None:
             sig = self.signal_by_index(index)
             type_name = sig.get("type", "et_default") if sig else "et_default"
-        return decode_value(type_name, raw)
+        return decode_value(type_name, raw, self.betriebsart_list, self.error_list)
 
     def signal_name(self, index: int) -> str:
         s = self.signal_by_index(index)
@@ -219,8 +348,12 @@ def _lookup_tables() -> tuple[tuple[dict, ...], tuple[dict, ...]]:
     return tuple(table.get("betriebsart_list", [])), tuple(table.get("error_list", []))
 
 
-def decode_value(type_name: str, raw: int) -> str:
-    """Raw value (uint16) as text per type rule (KElsterTable.cpp)."""
+def decode_value(type_name: str, raw: int, betriebsart: list[dict] | None = None,
+                 errors: list[dict] | None = None) -> str:
+    """Raw value (uint16) as text per type rule (KElsterTable.cpp).
+
+    betriebsart and errors: lists for et_betriebsart and et_err_nr / et_err_status. None: the
+    standard table (DEFAULT_JSON). ElsterDb.decode passes its own lists."""
     if type_name == "et_double_val":
         return f"{raw:.3f}"
     if type_name == "et_triple_val":
@@ -248,10 +381,21 @@ def decode_value(type_name: str, raw: int) -> str:
     if type_name == "et_little_endian":
         return str(hi + 256 * lo)
     if type_name == "et_betriebsart":
-        betriebsart, _ = _lookup_tables()
+        if betriebsart is None:
+            betriebsart = _lookup_tables()[0]
         if lo == 0 and hi < len(betriebsart):
             return betriebsart[hi]["name"]
         return "?"
+    if type_name == "et_hours":
+        return str(raw)  # unsigned hours
+    if type_name == "et_err_status":
+        # live fault status: fault number (ErrorList) in the high byte, low byte unused
+        if errors is None:
+            errors = _lookup_tables()[1]
+        for e in errors:
+            if _hex(e["index"]) == hi:
+                return e["name"]
+        return "0" if hi == 0 else f"ERR {hi}"
     if type_name == "et_zeit":
         return f"{lo:02d}:{hi:02d}"
     if type_name == "et_datum":
@@ -266,7 +410,8 @@ def decode_value(type_name: str, raw: int) -> str:
     if type_name == "et_dev_id":
         return f"{hi}-{lo:02d}"
     if type_name == "et_err_nr":
-        _, errors = _lookup_tables()
+        if errors is None:
+            errors = _lookup_tables()[1]
         for e in errors:
             if _hex(e["index"]) == raw:
                 return e["name"]
