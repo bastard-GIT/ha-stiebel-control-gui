@@ -240,7 +240,7 @@
   "The range covers {total} indices (limit {limit}). The scan may take a very long time.\n\nStart anyway?": "Der Bereich umfasst {total} Indizes (Limit {limit}). Der Scan kann sehr lange dauern.\n\nTrotzdem starten?",
   "The reference has unsaved changes. Discard?": "Die Referenz hat nicht gespeicherte Änderungen. Verwerfen?",
   "Time": "Zeit",
-  "Time (ms)": "Zeit (ms)",
+  "ESP uptime (ms)": "ESP-Laufzeit (ms)",
   "Timeout": "Timeout",
   "Timeout:": "Timeout:",
   "To (hex):": "Bis (hex):",

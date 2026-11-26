@@ -347,7 +347,7 @@ Type 0 (`d0 & 0x0F == 0`), sender 0x680, DLC 7. `d0 = ((id >> 3) & 0xF0) | 0x00`
 - `ts`: Unix seconds (float), rounded to 3 decimal places. `ts_src`: `"esp"` (from `u`) or `"pc"` (estimate).
 - Fallback `pc` (`ClockSync`): per batch, arrival (PC) − t/1000 = offset + latency. The smallest offset since the last reset is used. Reset when a batch contains a smaller `t` than before (ESP restart). Only frames without `u` feed the estimate.
 - Accuracy: `pc` approx. 10–50 ms, SNTP (`esp`) approx. 1–5 ms.
-- Live tab (`tab_live.py`): column "Time (ms)" always shows `t` and sorts by `t`. Column "Clock time" shows `ts` as local time `hh:mm:ss.mmm` (suffix ` ~` and tooltip if `ts_src` is `pc`) and sorts by `ts`, else `t`.
+- Live tab (`tab_live.py`): column "ESP uptime (ms)" always shows `t` and sorts by `t`. Column "Clock time" shows `ts` as local time `hh:mm:ss.mmm` (suffix ` ~` and tooltip if `ts_src` is `pc`) and sorts by `ts`, else `t`.
 
 ### 11.3 Files
 - CSV (`export_io.py`): columns `t;zeit_unix;zeit_lokal;…`. `zeit_unix` = `ts` with 3 decimal places. `zeit_lokal` = PC local time `JJJJ-MM-TT hh:mm:ss.mmm`. Without `ts` both stay empty.

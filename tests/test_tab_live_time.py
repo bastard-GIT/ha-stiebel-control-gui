@@ -54,21 +54,21 @@ def _clock(ts):
 
 
 def test_uhrzeit_column_follows_zeit():
-    assert tab_live.COLUMNS[0] == "Time (ms)"
+    assert tab_live.COLUMNS[0] == "ESP uptime (ms)"
     assert tab_live.COLUMNS[1] == "Clock time"
 
 
 def test_time_without_ts_shows_t_and_no_clock(app, db):
     model = _model(db, [F8])
-    assert _cell(model, 0, _col("Time (ms)")) == "1000"
+    assert _cell(model, 0, _col("ESP uptime (ms)")) == "1000"
     assert _cell(model, 0, _col("Clock time")) == ""
-    assert model.data(model.index(0, _col("Time (ms)")), Qt.ToolTipRole) is None
+    assert model.data(model.index(0, _col("ESP uptime (ms)")), Qt.ToolTipRole) is None
 
 
 def test_time_with_ts_still_shows_t_in_ms(app, db):
-    # "Time (ms)" always shows t (ms since ESP boot); the wall-clock time is in "Clock time".
+    # "ESP uptime (ms)" always shows t (ms since ESP boot); the wall-clock time is in "Clock time".
     model = _model(db, [F8_TS])
-    assert _cell(model, 0, _col("Time (ms)")) == "1000"
+    assert _cell(model, 0, _col("ESP uptime (ms)")) == "1000"
     assert _cell(model, 0, _col("Clock time")) == _clock(TS)
     assert len(_clock(TS)) == 12  # HH:MM:SS.mmm
     assert model.data(model.index(0, _col("Clock time")), Qt.ToolTipRole) is None
@@ -79,8 +79,8 @@ def test_pc_source_marks_clock_and_tooltip(app, db):
     idx = model.index(0, _col("Clock time"))
     assert _cell(model, 0, _col("Clock time")) == _clock(TS) + " ~"
     assert model.data(idx, Qt.ToolTipRole) == "PC estimate"
-    # t comes from the ESP, so the "Time (ms)" column has no PC hint
-    assert model.data(model.index(0, _col("Time (ms)")), Qt.ToolTipRole) is None
+    # t comes from the ESP, so the "ESP uptime (ms)" column has no PC hint
+    assert model.data(model.index(0, _col("ESP uptime (ms)")), Qt.ToolTipRole) is None
 
 
 def test_sort_clock_column_numeric_by_ts(app, db):
@@ -128,9 +128,9 @@ def test_rows_roundtrip_keeps_ts_and_src(app, db):
 
     again = _model(db, rows)
     assert again.rows() == rows
-    assert _cell(again, 0, _col("Time (ms)")) == "1000"
+    assert _cell(again, 0, _col("ESP uptime (ms)")) == "1000"
     assert _cell(again, 0, _col("Clock time")) == _clock(TS)
-    assert _cell(again, 1, _col("Time (ms)")) == "1040"
+    assert _cell(again, 1, _col("ESP uptime (ms)")) == "1040"
 
 
 def test_load_rows_accepts_legacy_without_ts(app, db):
