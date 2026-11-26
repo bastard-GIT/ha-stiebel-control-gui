@@ -70,7 +70,7 @@ The GUI also starts without an Elster table (missing or invalid ElsterTable.json
 ## 5. Functions (tabs)
 
 - **Live** (`tab_live.py`): shows CAN frames from the ESP in real time with Elster decoding, filterable by CAN ID and type.
-- **Query** (`tab_query.py`): reads or writes an Elster signal via MQTT and shows the history of results.
+- **Query** (`tab_query.py`): reads or writes an Elster signal via MQTT and shows the history of results. Read mode accepts several recipients separated by `;` or `,`; they are queried one after another with the same index, format and switch.
 - **Scanner** (`tab_scanner.py`): queries an index range of a CAN member and shows the hit list with names from the reference.
 - **Status** (`tab_status.py`): shows availability, MQTT connection and the firmware status (counters, ring buffer, TWAI errors).
 - **Analysis** (`tab_analyse.py`): compares one index across several members and helps choose the type.

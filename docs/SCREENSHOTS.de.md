@@ -25,12 +25,15 @@ steuern den Sniffer im ESP.
 
 ![Tab Abfrage](screenshots/02-query.png)
 
-Der Tab Abfrage liest bei Bedarf ein Elster-Signal eines Members. Das Beispiel
-liest Index 0x4EEF von MANAGER (0x480). Man wählt Empfänger, Index (Hex oder
-Signalname), Format und Schalter (aktuell, min, max oder alle). „Letztes
-Ergebnis“ zeigt den dekodierten Wert und den Status der letzten Abfrage, der
-Verlauf behält die letzten Ergebnisse, neueste oben. Der Schreibmodus liegt im
-selben Tab. Vor dem Senden eines Werts fragt die GUI nach einer Bestätigung.
+Der Tab Abfrage liest bei Bedarf ein Elster-Signal eines oder mehrerer Members.
+Das Beispiel liest Index 0x4EEF von MANAGER (0x480). Man wählt Empfänger, Index
+(Hex oder Signalname), Format und Schalter (aktuell, min, max oder alle).
+Mehrere Empfänger trennt man mit `;` oder `,`; sie werden nacheinander mit
+demselben Index, Format und Schalter abgefragt. „Letztes Ergebnis“ zeigt je
+Empfänger eine Zeile mit dem dekodierten Wert und dem Status, der Verlauf behält
+die letzten Ergebnisse, neueste oben. Der Schreibmodus liegt im selben Tab und
+nimmt genau einen Empfänger. Vor dem Senden eines Werts fragt die GUI nach einer
+Bestätigung.
 
 ## 03 Tab Scanner
 

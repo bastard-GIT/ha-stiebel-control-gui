@@ -118,11 +118,15 @@ class QueryTab(QWidget):
         # (member, index, switch) of the last query; only its response fills "Last result".
         self._pending: tuple[int, int, int] | None = None
         self._fw = FW_UNKNOWN
-        # 'alle' sequence: member, index, fmt, queue (switches not yet sent), current.
+        # Running query sequence: index, fmt, queue of (member, switch) steps not yet sent, current step.
         self._seq: dict | None = None
-        # Result per switch for the line 'aktuell | min | max'; None = not yet received.
-        self._alle_key: tuple[int, int] | None = None
-        self._alle_results: dict[int, str | None] = {}
+        # Display of the last multi-recipient or 'all' query: index (None = none), recipients,
+        # switches per recipient, result per (member, switch); None = not yet received.
+        self._multi_key: int | None = None
+        self._multi_members: list[int] = []
+        self._multi_switches: tuple[int, ...] = ()
+        self._multi_all = False
+        self._multi_results: dict[tuple[int, int], str | None] = {}
         self._seq_timer = QTimer(self)
         self._seq_timer.setSingleShot(True)
         self._seq_timer.timeout.connect(self._on_seq_timeout)
@@ -392,6 +396,8 @@ class QueryTab(QWidget):
 
     def _write_plan(self):
         """Checks all write inputs. Returns (plan, '') or (None, error text)."""
+        if re.search(r"[;,]", self._member_combo.currentText()):
+            return None, _("Write mode accepts exactly one recipient.")
         member, member_error = self._parse_member(self._member_combo.currentText())
         if member is None:
             return None, member_error
@@ -559,6 +565,22 @@ class QueryTab(QWidget):
             return None, _("Member 0x{value:x} outside 0x000..0x7FF.").format(value=value)
         return value, ""
 
+    def _parse_members(self, text: str) -> tuple[list[int] | None, str]:
+        """Recipients separated by ';' or ','. Duplicates removed, order kept.
+        Returns (can_ids, '') or (None, hint)."""
+        members: list[int] = []
+        for part in re.split(r"[;,]", text):
+            if not part.strip():
+                continue
+            member, error = self._parse_member(part)
+            if member is None:
+                return None, error
+            if member not in members:
+                members.append(member)
+        if not members:
+            return None, _("Please enter a member (name, 0x-hex or number).")
+        return members, ""
+
     def _parse_src(self) -> tuple[int | None, str]:
         """Sender from 'NAME (0x700)', number or '0x..'. 0x680 allowed (default)."""
         text = self._src_combo.currentText().strip()
@@ -630,62 +652,77 @@ class QueryTab(QWidget):
 
     # ----- Slots -----------------------------------------------------------
 
+    def _query_error(self, text: str) -> None:
+        """Input error of a query: clears the last result and the multi display, shows the hint."""
+        self._info_label.setText("")
+        self._multi_key = None
+        self._hint_label.setText(text)
+
     def _on_query(self):
         if self._seq is not None:
-            return  # 'alle' sequence already running
+            return  # query sequence already running
         if self._mode() == MODE_WRITE:
             return  # Enter in the index field never sends a write command
-        member, member_error = self._parse_member(self._member_combo.currentText())
-        if member is None:
-            self._hint_label.setText(member_error)
+        members, member_error = self._parse_members(self._member_combo.currentText())
+        if members is None:
+            self._query_error(member_error)
             return
         index, hint = self._resolve_index(self._index_edit.text())
         if index is None:
-            self._hint_label.setText(hint)
+            self._query_error(hint)
             return
         if not 0 <= index <= 0xFFFF:
-            self._hint_label.setText(_("Index must be between 0x0000 and 0xFFFF."))
+            self._query_error(_("Index must be between 0x0000 and 0xFFFF."))
             return
         fmt = self._format_combo.currentData()
         switch = self._switch_combo.currentData()
         if fmt == "short" and index > 0xFF:
-            self._hint_label.setText(_("Short format only for index up to 0xFF; please choose format auto or long."))
+            self._query_error(_("Short format only for index up to 0xFF; please choose format auto or long."))
             return
         src, src_error = self._parse_src()
         if src is None:
-            self._hint_label.setText(src_error)
+            self._query_error(src_error)
             return
-        if src == member:
-            self._hint_label.setText(_("Sender and recipient must not be the same."))
+        if src in members:
+            self._query_error(_("Sender and recipient must not be the same."))
             return
         self._read_src = src
         self._read_timeout = self._timeout_spin.value()
         self._hint_label.setText(hint)
-        if switch == SWITCH_ALL:
-            self._start_sequence(member, index, fmt)
+        if switch == SWITCH_ALL or len(members) > 1:
+            all_mode = switch == SWITCH_ALL
+            switches = SEQ_SWITCHES if all_mode else (switch,)
+            self._start_sequence(members, index, fmt, switches, all_mode)
             return
-        self._alle_key = None  # single query: summary line of 'alle' no longer current
+        member = members[0]
+        self._multi_key = None  # single query: no multi display
         self._info_label.setText(_("Request sent: recipient 0x{member:03x}, sender 0x{src:03x}, "
                                    "index 0x{index:04x} ...").format(member=member, src=src, index=index))
         self._pending = (member, index, switch)
         self._bridge.send_read(member, index, fmt, switch, **self._read_extra())
 
-    def _start_sequence(self, member: int, index: int, fmt: str) -> None:
-        self._alle_key = (member, index)
-        self._alle_results = {sw: None for _label, sw in SUMMARY_LABELS}
-        self._seq = {"member": member, "index": index, "fmt": fmt,
-                     "queue": list(SEQ_SWITCHES[1:]), "current": SEQ_SWITCHES[0]}
-        self._info_label.setText(self._summary_text())
+    def _start_sequence(self, members: list[int], index: int, fmt: str,
+                        switches: tuple[int, ...], all_mode: bool) -> None:
+        """Queries every (member, switch) step by step; only one request is open at a time."""
+        self._multi_key = index
+        self._multi_members = members
+        self._multi_switches = switches
+        self._multi_all = all_mode
+        self._multi_results = {(m, sw): None for m in members for sw in switches}
+        steps = [(m, sw) for m in members for sw in switches]
+        self._seq = {"index": index, "fmt": fmt, "queue": steps[1:], "current": steps[0]}
+        self._info_label.setText(self._multi_text())
         self._apply_lock()
         self._send_step()
 
     def _send_step(self) -> None:
         seq = self._seq
-        self._pending = (seq["member"], seq["index"], seq["current"])
+        member, switch = seq["current"]
+        self._pending = (member, seq["index"], switch)
         # Longer firmware timeout: GUI waits correspondingly longer.
         wait = SEQ_TIMEOUT_MS if self._read_timeout <= 1000 else max(SEQ_TIMEOUT_MS, self._read_timeout + 1000)
         self._seq_timer.start(wait)
-        self._bridge.send_read(seq["member"], seq["index"], seq["fmt"], seq["current"], **self._read_extra())
+        self._bridge.send_read(member, seq["index"], seq["fmt"], switch, **self._read_extra())
 
     def _seq_advance(self) -> None:
         seq = self._seq
@@ -695,7 +732,11 @@ class QueryTab(QWidget):
             return
         self._seq = None
         self._apply_lock()
-        self._hint_label.setText(_("Query 'all' completed."))
+        if len(self._multi_members) == 1 and self._multi_all:
+            self._hint_label.setText(_("Query 'all' completed."))
+        else:
+            self._hint_label.setText(_("Query of {count} recipients completed.").format(
+                count=len(self._multi_members)))
 
     def _seq_abort(self, text: str) -> None:
         self._seq_timer.stop()
@@ -707,17 +748,33 @@ class QueryTab(QWidget):
         seq = self._seq
         if seq is None:
             return
-        if self._alle_results.get(seq["current"]) is None:
-            self._alle_results[seq["current"]] = NO_ANSWER
-        self._info_label.setText(self._summary_text())
+        if self._multi_results.get(seq["current"]) is None:
+            self._multi_results[seq["current"]] = NO_ANSWER
+        self._info_label.setText(self._multi_text())
         self._seq_advance()
 
-    def _summary_text(self) -> str:
+    def _summary_text(self, member: int) -> str:
+        """'current | min | max' line of one recipient for the 'all' query."""
         parts = []
         for label, sw in SUMMARY_LABELS:
-            value = self._alle_results.get(sw)
+            value = self._multi_results.get((member, sw))
             parts.append(_("{label}: {value}").format(label=label, value=value if value is not None else '-'))
         return " | ".join(parts)
+
+    def _multi_text(self) -> str:
+        """'Last result' of a multi query: one line per recipient, a single recipient without name prefix."""
+        lines = []
+        for member in self._multi_members:
+            if self._multi_all:
+                body = self._summary_text(member)
+            else:
+                value = self._multi_results.get((member, self._multi_switches[0]))
+                body = value if value is not None else '-'
+            if len(self._multi_members) == 1:
+                lines.append(body)
+            else:
+                lines.append(f"{self._db.member_name(member)} (0x{member:03x}): {body}")
+        return "\n".join(lines)
 
     @staticmethod
     def _alle_text(status: str, value_text: str) -> str:
@@ -766,16 +823,16 @@ class QueryTab(QWidget):
         if member is not None and status == "ok" and raw is not None:
             self._last_read[(member, index)] = f"{value_text} ({raw_hex})"
 
-        # Response of an 'alle' sequence: update summary line, continue on current switch.
-        if member is not None and (member, index) == self._alle_key and switch in self._alle_results:
-            self._alle_results[switch] = self._alle_text(status, value_text)
-            self._info_label.setText(self._summary_text())
-            if self._seq is not None and switch == self._seq["current"]:
-                self._seq_timer.stop()
-                self._seq_advance()
+        # Response to the current step of a query sequence: update the display, continue with the next step.
+        seq = self._seq
+        if seq is not None and (member, switch) == seq["current"] and index == seq["index"]:
+            self._multi_results[seq["current"]] = self._alle_text(status, value_text)
+            self._info_label.setText(self._multi_text())
+            self._seq_timer.stop()
+            self._seq_advance()
         # Only the response to the current query (member, index, switch) fills the
-        # "Last result" field; other switch responses only appear in the history.
-        elif self._pending == (member, index, switch):
+        # "Last result" field; other responses only appear in the history.
+        elif self._multi_key is None and self._pending == (member, index, switch):
             self._info_label.setText(
                 _("Name: {name}\n"
                   "Recipient: {member}{src}   Index: 0x{index:04x}   Switch: {switch}\n"

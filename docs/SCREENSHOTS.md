@@ -25,12 +25,14 @@ ESP.
 
 ![Query tab](screenshots/02-query.png)
 
-The Query tab reads one Elster signal from one member on demand. The example
-reads index 0x4EEF from MANAGER (0x480). Choose the recipient, the index (hex or
-signal name), the format and the switch (current, min, max or all). "Last result"
-shows the decoded value and status of the last query, and "History" keeps the
-recent results, newest on top. Write mode is on the same tab. Before a value is
-sent, the GUI asks for confirmation.
+The Query tab reads one Elster signal from one or more members on demand. The
+example reads index 0x4EEF from MANAGER (0x480). Choose the recipient(s), the
+index (hex or signal name), the format and the switch (current, min, max or all).
+Several recipients are separated by `;` or `,` and are queried one after another
+with the same index, format and switch. "Last result" shows one line per
+recipient with the decoded value and status, and "History" keeps the recent
+results, newest on top. Write mode is on the same tab and takes exactly one
+recipient. Before a value is sent, the GUI asks for confirmation.
 
 ## 03 Scanner tab
 

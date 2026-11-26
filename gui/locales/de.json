@@ -160,6 +160,8 @@
   "Query": "Abfrage",
   "Query 'all' aborted: firmware status unknown.": "Abfrage 'all' abgebrochen: Firmware-Status unbekannt.",
   "Query 'all' completed.": "Abfrage 'all' abgeschlossen.",
+  "Write mode accepts exactly one recipient.": "Der Schreibmodus akzeptiert genau einen Empfänger.",
+  "Query of {count} recipients completed.": "Abfrage von {count} Empfängern abgeschlossen.",
   "Quit": "Beenden",
   "RX": "RX",
   "RX buffer used:": "RX-Puffer belegt:",
